@@ -84,27 +84,113 @@ const generateFlowchart = async (req, res) => {
 
         // Create comprehensive prompt for flowchart generation
         const systemPrompt = `
-        You are an expert flowchart designer. Create a React Flow compatible JSON structure for the following request.
+You are an expert flowchart designer specializing in complex, enterprise-level process diagrams. Create a React Flow compatible JSON structure for the following request.
 
-        IMPORTANT REQUIREMENTS:
-        1. Generate nodes with unique IDs (node_1, node_2, etc.)
-        2. Each node must have: id, type, data (with label), position (x, y coordinates)
-        3. Common node types: 'input', 'default', 'output', 'decision' (for decision points)
-        4. Generate edges connecting nodes with unique IDs (edge_1, edge_2, etc.)
-        5. Each edge must have: id, source, target (matching node IDs)
-        6. Position nodes in a logical flow (top to bottom, left to right)
-        7. Use appropriate spacing between nodes (minimum 150px apart)
-        8. For decision nodes, create multiple outgoing edges with labels like "Yes", "No"
-        9. Make the flowchart visually appealing with proper positioning
-        10. Include style properties for better visual appearance
+CORE REQUIREMENTS:
+1. Generate nodes with unique IDs following pattern: node_[category]_[number] (e.g., node_start_1, node_process_1)
+2. Each node must have: id, type, data (with label and optional metadata), position (x, y coordinates)
+3. Node types: 'input', 'default', 'output', 'decision', 'process', 'subprocess', 'connector', 'custom'
+4. Generate edges with unique IDs following pattern: edge_[source]_to_[target] (e.g., edge_start_1_to_process_1)
+5. Each edge must have: id, source, target, type, label (for decision branches), style properties
 
-        Complexity level: ${complexity}
-        Style preference: ${style}
+ADVANCED POSITIONING & LAYOUT:
+- Calculate positions for multiple parallel paths and complex branching
+- Use grid-based positioning: base grid of 300x200 pixels per node slot
+- For parallel processes: arrange horizontally at same Y level with 350px spacing
+- For sequential steps: arrange vertically with 250px spacing
+- For decision branches: position branches at ±200px X offset from decision node
+- For convergence points: align multiple inputs to single output node
+- Handle swimlanes: group related processes with consistent X positioning
+- Support multi-layer architecture: use Y-axis layers (0-200, 300-500, 600-800, etc.)
 
-        User Request: ${prompt}
+COMPLEX STRUCTURE SUPPORT:
+- Multiple starting points: Support workflows with several initiation triggers
+- Parallel execution paths: Create simultaneous processes that run concurrently
+- Convergence and synchronization: Merge parallel paths with proper connector nodes
+- Nested subprocess: Use 'subprocess' type for complex sub-workflows
+- Decision trees: Support multiple-level decision making with proper branching
+- Loop structures: Handle iterative processes with feedback edges
+- Exception handling: Include error paths and recovery processes
+- Conditional branching: Support multiple conditions from single decision node
 
-        Create a complete, valid React Flow JSON structure that represents this process as a flowchart.
-        `;
+ENTERPRISE FEATURES:
+- Role-based swimlanes: Group nodes by responsible department/role
+- Process hierarchy: Support parent-child process relationships  
+- Resource dependencies: Show resource allocation and constraints
+- Time-based sequencing: Include timing information in metadata
+- Approval workflows: Handle multi-stage approval processes
+- Integration points: Mark external system touchpoints
+- Data flow indicators: Show information exchange between processes
+
+ENHANCED NODE PROPERTIES:
+- Include metadata: { duration, resources, stakeholders, systemId, priority }
+- Add styling based on node category: colors, icons, sizes
+- Support custom node dimensions for complex processes
+- Include status indicators: pending, active, completed, error
+
+EDGE ENHANCEMENTS:
+- Conditional labels: "Yes", "No", "Approved", "Rejected", "Timeout"
+- Edge types: 'default', 'smoothstep', 'straight', 'step'  
+- Visual styling: colors, thickness, animation for active paths
+- Data flow indicators: show information/document flow direction
+
+LAYOUT ALGORITHMS:
+For complexity level:
+- Simple (1-10 nodes): Linear or basic branching layout
+- Medium (11-25 nodes): Multi-path with some parallelism  
+- Complex (26-50 nodes): Full parallel processing with swimlanes
+- Enterprise (50+ nodes): Multi-layer architecture with subprocess grouping
+
+POSITIONING CALCULATIONS:
+- Start nodes: Y=100, X based on number of starting points
+- Decision nodes: Center branches around decision point
+- Parallel paths: Calculate X positions to avoid overlap
+- Convergence: Position merge points to accommodate all inputs
+- End nodes: Bottom tier with proper spacing
+
+ACCESSIBILITY & STANDARDS:
+- Ensure minimum 150px spacing between adjacent nodes
+- Use consistent node sizing: width 180-220px, height 60-100px  
+- Provide clear visual hierarchy with appropriate node types
+- Include descriptive labels and meaningful IDs
+- Support responsive layouts for different screen sizes
+
+METADATA STRUCTURE:
+Include comprehensive metadata:
+{
+  "title": "Process Title",
+  "description": "Process description", 
+  "complexity": "${complexity}",
+  "style": "${style}",
+  "nodeCount": number,
+  "edgeCount": number,
+  "layers": ["layer1", "layer2"],
+  "swimlanes": ["role1", "role2"],
+  "estimatedDuration": "time estimate",
+  "stakeholders": ["stakeholder list"]
+}
+
+STYLE VARIATIONS:
+- Corporate: Clean, professional styling with subdued colors
+- Technical: Detailed with system information and technical specs
+- Creative: Vibrant colors and modern design elements  
+- Minimal: Simple, clean design with focus on clarity
+- Detailed: Comprehensive information display with rich metadata
+
+ERROR HANDLING:
+- Validate all node connections have valid source/target
+- Ensure no orphaned nodes (except designated start/end)
+- Check for circular dependencies in non-loop structures
+- Verify position coordinates don't create overlaps
+
+User Request Context:
+Complexity level: ${complexity}
+Style preference: ${style}  
+Request: ${prompt}
+
+Generate a complete, production-ready React Flow JSON structure that represents this process as a sophisticated, navigable flowchart suitable for enterprise use. Ensure the structure can handle complex business processes with multiple stakeholders, parallel execution paths, and comprehensive process documentation.
+`;
+
 
         console.log('Generating flowchart for prompt:', prompt);
 
