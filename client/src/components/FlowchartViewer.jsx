@@ -40,7 +40,9 @@ import {
 } from 'react-icons/fi';
 import '@xyflow/react/dist/style.css';
 
-// Constants for better maintainability
+// ------------------------------------
+// Constants
+// ------------------------------------
 const LAYOUT_CONFIG = {
   nodeWidth: 200,
   nodeHeight: 80,
@@ -62,7 +64,9 @@ const EXPORT_CONFIG = {
   backgroundColor: '#ffffff'
 };
 
-// Enhanced Dagre layout with error handling
+// ------------------------------------
+// Dagre Layout Function
+// ------------------------------------
 const createLayoutedElements = (nodes, edges, direction = 'TB') => {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
@@ -74,7 +78,6 @@ const createLayoutedElements = (nodes, edges, direction = 'TB') => {
     ...LAYOUT_CONFIG
   });
 
-  // Validate and add nodes
   const validNodes = nodes.filter(node =>
     node.id && node.data && typeof node.data === 'object'
   );
@@ -86,7 +89,6 @@ const createLayoutedElements = (nodes, edges, direction = 'TB') => {
     });
   });
 
-  // Validate and add edges
   const validEdges = edges.filter(edge =>
     edge.source && edge.target &&
     validNodes.some(n => n.id === edge.source) &&
@@ -124,7 +126,9 @@ const createLayoutedElements = (nodes, edges, direction = 'TB') => {
   return { nodes: layoutedNodes, edges: validEdges };
 };
 
-// Enhanced styling functions
+// ------------------------------------
+// Styling Helpers
+// ------------------------------------
 const getNodeStyles = (nodeType) => {
   const baseStyle = {
     width: LAYOUT_CONFIG.nodeWidth - 20,
@@ -192,7 +196,9 @@ const createStyledEdge = (edge) => ({
   labelBgPadding: [8, 4],
 });
 
-// Custom hooks for better state management
+// ------------------------------------
+// Custom Hook
+// ------------------------------------
 const useFlowchartState = (flowchartData, layoutDirection) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -232,7 +238,9 @@ const useFlowchartState = (flowchartData, layoutDirection) => {
   return { processedData, isLoading, error, setIsLoading };
 };
 
-// Main component
+// ------------------------------------
+// Main Viewer
+// ------------------------------------
 const FlowchartViewerInner = ({ flowchartData, onClose }) => {
   const [layoutDirection, setLayoutDirection] = useState('TB');
   const [isExporting, setIsExporting] = useState(false);
@@ -250,14 +258,12 @@ const FlowchartViewerInner = ({ flowchartData, onClose }) => {
   const [nodes, setNodes, onNodesChange] = useNodesState(processedData.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(processedData.edges);
 
-  // Update nodes and edges when processed data changes
   useEffect(() => {
     setNodes(processedData.nodes);
     setEdges(processedData.edges);
     setIsLoading(false);
   }, [processedData, setNodes, setEdges, setIsLoading]);
 
-  // Auto-fit view on data change
   useEffect(() => {
     if (!isLoading && nodes.length > 0) {
       const timer = setTimeout(() => {
@@ -275,7 +281,6 @@ const FlowchartViewerInner = ({ flowchartData, onClose }) => {
     [setEdges]
   );
 
-  // Enhanced export functions
   const exportOptions = useMemo(() => [
     {
       name: 'PNG (High Quality)',
@@ -359,7 +364,7 @@ const FlowchartViewerInner = ({ flowchartData, onClose }) => {
         transition={{ duration: ANIMATION_CONFIG.duration }}
       >
         <div className="flex flex-col h-full">
-          {/* Enhanced Header */}
+          {/* Header */}
           <div className="bg-white/95 backdrop-blur-sm border-b border-gray-200 px-6 py-4 shadow-sm">
             <div className="flex justify-between items-center">
               <div className="flex items-center space-x-4">
@@ -375,7 +380,6 @@ const FlowchartViewerInner = ({ flowchartData, onClose }) => {
                   </div>
                 </div>
 
-                {/* Stats */}
                 <div className="hidden md:flex items-center space-x-3 text-sm">
                   <div className="flex items-center space-x-1 px-3 py-1 bg-blue-50 rounded-lg">
                     <FiLayers className="w-4 h-4 text-blue-600" />
@@ -388,15 +392,13 @@ const FlowchartViewerInner = ({ flowchartData, onClose }) => {
                 </div>
               </div>
 
-              {/* Controls */}
               <div className="flex items-center space-x-2">
-                {/* Layout Toggle */}
                 <div className="flex bg-gray-100 rounded-lg p-1">
                   <button
                     onClick={() => handleLayoutChange('TB')}
                     className={`px-3 py-1 rounded text-sm font-medium transition-colors ${layoutDirection === 'TB'
-                        ? 'bg-blue-500 text-white'
-                        : 'text-gray-600 hover:text-blue-600'
+                      ? 'bg-blue-500 text-white'
+                      : 'text-gray-600 hover:text-blue-600'
                       }`}
                   >
                     Vertical
@@ -404,8 +406,8 @@ const FlowchartViewerInner = ({ flowchartData, onClose }) => {
                   <button
                     onClick={() => handleLayoutChange('LR')}
                     className={`px-3 py-1 rounded text-sm font-medium transition-colors ${layoutDirection === 'LR'
-                        ? 'bg-blue-500 text-white'
-                        : 'text-gray-600 hover:text-blue-600'
+                      ? 'bg-blue-500 text-white'
+                      : 'text-gray-600 hover:text-blue-600'
                       }`}
                   >
                     Horizontal
@@ -432,7 +434,6 @@ const FlowchartViewerInner = ({ flowchartData, onClose }) => {
                   )}
                 </button>
 
-                {/* Export Dropdown */}
                 <div className="relative">
                   <select
                     onChange={(e) => {
@@ -469,7 +470,7 @@ const FlowchartViewerInner = ({ flowchartData, onClose }) => {
             </div>
           </div>
 
-          {/* Flowchart Container */}
+          {/* Flowchart */}
           <div className="flex-1 relative" ref={reactFlowRef}>
             {isLoading ? (
               <div className="flex items-center justify-center h-full">
@@ -537,6 +538,9 @@ const FlowchartViewerInner = ({ flowchartData, onClose }) => {
   );
 };
 
+// ------------------------------------
+// Wrapper with Provider
+// ------------------------------------
 const FlowchartViewer = (props) => {
   return (
     <ReactFlowProvider>

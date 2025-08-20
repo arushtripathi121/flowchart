@@ -1,28 +1,37 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
+import {
+    FaBrain,
+    FaRocket,
+    FaPalette,
+    FaMobile,
+    FaChartLine,
+    FaArrowRight
+} from 'react-icons/fa';
+import { HiLightningBolt } from 'react-icons/hi';
 
 const Home = () => {
     const features = [
         {
-            icon: '🤖',
+            icon: FaBrain,
             title: 'AI-Powered',
             description: 'Advanced AI generates flowcharts from natural language',
             color: 'from-blue-500 to-cyan-500'
         },
         {
-            icon: '⚡',
+            icon: HiLightningBolt,
             title: 'Instant Results',
             description: 'Get professional flowcharts in seconds',
             color: 'from-yellow-500 to-orange-500'
         },
         {
-            icon: '🎨',
+            icon: FaPalette,
             title: 'Beautiful Design',
             description: 'Multiple styles and customization options',
             color: 'from-purple-500 to-pink-500'
         },
         {
-            icon: '📱',
+            icon: FaMobile,
             title: 'Interactive',
             description: 'Zoom, pan, and edit your generated flowcharts',
             color: 'from-green-500 to-emerald-500'
@@ -73,7 +82,7 @@ const Home = () => {
                                     whileHover={{ scale: 1.05, y: -2 }}
                                     whileTap={{ scale: 0.95 }}
                                 >
-                                    <span>🚀</span>
+                                    <FaRocket className="text-lg" />
                                     <span>Start Creating</span>
                                 </motion.button>
                             </Link>
@@ -84,7 +93,7 @@ const Home = () => {
                                     whileHover={{ scale: 1.05, y: -2 }}
                                     whileTap={{ scale: 0.95 }}
                                 >
-                                    <span>📊</span>
+                                    <FaChartLine className="text-lg" />
                                     <span>View Examples</span>
                                 </motion.button>
                             </Link>
@@ -97,30 +106,35 @@ const Home = () => {
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.8, duration: 0.8 }}
                     >
-                        {features.map((feature, index) => (
-                            <motion.div
-                                key={index}
-                                className="relative group"
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 1 + index * 0.1, duration: 0.6 }}
-                                whileHover={{ y: -10, scale: 1.02 }}
-                            >
-                                <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 h-full relative overflow-hidden">
-                                    <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-5 group-hover:opacity-10 transition-opacity duration-300`} />
+                        {features.map((feature, index) => {
+                            const IconComponent = feature.icon;
+                            return (
+                                <motion.div
+                                    key={index}
+                                    className="relative group"
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 1 + index * 0.1, duration: 0.6 }}
+                                    whileHover={{ y: -10, scale: 1.02 }}
+                                >
+                                    <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 h-full relative overflow-hidden">
+                                        <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-5 group-hover:opacity-10 transition-opacity duration-300`} />
 
-                                    <div className="relative z-10">
-                                        <div className="text-4xl mb-4">{feature.icon}</div>
-                                        <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                                            {feature.title}
-                                        </h3>
-                                        <p className="text-gray-600 leading-relaxed">
-                                            {feature.description}
-                                        </p>
+                                        <div className="relative z-10">
+                                            <div className="text-4xl mb-4 text-gray-700">
+                                                <IconComponent />
+                                            </div>
+                                            <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                                                {feature.title}
+                                            </h3>
+                                            <p className="text-gray-600 leading-relaxed">
+                                                {feature.description}
+                                            </p>
+                                        </div>
                                     </div>
-                                </div>
-                            </motion.div>
-                        ))}
+                                </motion.div>
+                            );
+                        })}
                     </motion.div>
                 </div>
             </section>
@@ -141,11 +155,12 @@ const Home = () => {
                         </p>
                         <Link to="/generator">
                             <motion.button
-                                className="px-10 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                                className="px-10 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center space-x-2 mx-auto"
                                 whileHover={{ scale: 1.05, y: -2 }}
                                 whileTap={{ scale: 0.95 }}
                             >
-                                Get Started Now →
+                                <span>Get Started Now</span>
+                                <FaArrowRight className="text-sm" />
                             </motion.button>
                         </Link>
                     </motion.div>

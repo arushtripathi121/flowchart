@@ -82,115 +82,42 @@ const generateFlowchart = async (req, res) => {
             }
         });
 
-        // Create comprehensive prompt for flowchart generation
+        // Corrected system prompt with fixed registration flow
         const systemPrompt = `
-You are an expert flowchart designer specializing in complex, enterprise-level process diagrams. Create a React Flow compatible JSON structure for the following request.
+You are an expert flowchart designer specializing in complex, enterprise-level process diagrams. 
+Create a React Flow compatible JSON structure for the following request.
+
+⚠️ IMPORTANT FIXED LOGIC:
+For user registration flows:
+- If input is invalid → Reject Registration → End (DO NOT send confirmation email).
+- If input is valid → Create Account → Send Confirmation Email → Registration Complete.
+
+Ensure the Reject path terminates properly.
 
 CORE REQUIREMENTS:
 1. Generate nodes with unique IDs following pattern: node_[category]_[number] (e.g., node_start_1, node_process_1)
-2. Each node must have: id, type, data (with label and optional metadata), position (x, y coordinates)
-3. Node types: 'input', 'default', 'output', 'decision', 'process', 'subprocess', 'connector', 'custom'
-4. Generate edges with unique IDs following pattern: edge_[source]_to_[target] (e.g., edge_start_1_to_process_1)
-5. Each edge must have: id, source, target, type, label (for decision branches), style properties
+2. Each node must have: id, type, data (with label), position (x,y)
+3. Node types: 'input', 'process', 'decision', 'output'
+4. Generate edges with IDs: edge_[source]_to_[target]
+5. Edges must include: id, source, target, type, optional label
 
-ADVANCED POSITIONING & LAYOUT:
-- Calculate positions for multiple parallel paths and complex branching
-- Use grid-based positioning: base grid of 300x200 pixels per node slot
-- For parallel processes: arrange horizontally at same Y level with 350px spacing
-- For sequential steps: arrange vertically with 250px spacing
-- For decision branches: position branches at ±200px X offset from decision node
-- For convergence points: align multiple inputs to single output node
-- Handle swimlanes: group related processes with consistent X positioning
-- Support multi-layer architecture: use Y-axis layers (0-200, 300-500, 600-800, etc.)
+LAYOUT:
+- Grid base: 300x200
+- Sequential steps vertical spacing: 250px
+- Decision branches: ±200px X offset
+- Reject branch should go directly down to End, no convergence into success flow.
 
-COMPLEX STRUCTURE SUPPORT:
-- Multiple starting points: Support workflows with several initiation triggers
-- Parallel execution paths: Create simultaneous processes that run concurrently
-- Convergence and synchronization: Merge parallel paths with proper connector nodes
-- Nested subprocess: Use 'subprocess' type for complex sub-workflows
-- Decision trees: Support multiple-level decision making with proper branching
-- Loop structures: Handle iterative processes with feedback edges
-- Exception handling: Include error paths and recovery processes
-- Conditional branching: Support multiple conditions from single decision node
-
-ENTERPRISE FEATURES:
-- Role-based swimlanes: Group nodes by responsible department/role
-- Process hierarchy: Support parent-child process relationships  
-- Resource dependencies: Show resource allocation and constraints
-- Time-based sequencing: Include timing information in metadata
-- Approval workflows: Handle multi-stage approval processes
-- Integration points: Mark external system touchpoints
-- Data flow indicators: Show information exchange between processes
-
-ENHANCED NODE PROPERTIES:
-- Include metadata: { duration, resources, stakeholders, systemId, priority }
-- Add styling based on node category: colors, icons, sizes
-- Support custom node dimensions for complex processes
-- Include status indicators: pending, active, completed, error
-
-EDGE ENHANCEMENTS:
-- Conditional labels: "Yes", "No", "Approved", "Rejected", "Timeout"
-- Edge types: 'default', 'smoothstep', 'straight', 'step'  
-- Visual styling: colors, thickness, animation for active paths
-- Data flow indicators: show information/document flow direction
-
-LAYOUT ALGORITHMS:
-For complexity level:
-- Simple (1-10 nodes): Linear or basic branching layout
-- Medium (11-25 nodes): Multi-path with some parallelism  
-- Complex (26-50 nodes): Full parallel processing with swimlanes
-- Enterprise (50+ nodes): Multi-layer architecture with subprocess grouping
-
-POSITIONING CALCULATIONS:
-- Start nodes: Y=100, X based on number of starting points
-- Decision nodes: Center branches around decision point
-- Parallel paths: Calculate X positions to avoid overlap
-- Convergence: Position merge points to accommodate all inputs
-- End nodes: Bottom tier with proper spacing
-
-ACCESSIBILITY & STANDARDS:
-- Ensure minimum 150px spacing between adjacent nodes
-- Use consistent node sizing: width 180-220px, height 60-100px  
-- Provide clear visual hierarchy with appropriate node types
-- Include descriptive labels and meaningful IDs
-- Support responsive layouts for different screen sizes
-
-METADATA STRUCTURE:
-Include comprehensive metadata:
-{
-  "title": "Process Title",
-  "description": "Process description", 
-  "complexity": "${complexity}",
-  "style": "${style}",
-  "nodeCount": number,
-  "edgeCount": number,
-  "layers": ["layer1", "layer2"],
-  "swimlanes": ["role1", "role2"],
-  "estimatedDuration": "time estimate",
-  "stakeholders": ["stakeholder list"]
-}
-
-STYLE VARIATIONS:
-- Corporate: Clean, professional styling with subdued colors
-- Technical: Detailed with system information and technical specs
-- Creative: Vibrant colors and modern design elements  
-- Minimal: Simple, clean design with focus on clarity
-- Detailed: Comprehensive information display with rich metadata
-
-ERROR HANDLING:
-- Validate all node connections have valid source/target
-- Ensure no orphaned nodes (except designated start/end)
-- Check for circular dependencies in non-loop structures
-- Verify position coordinates don't create overlaps
+STYLE:
+- Input: blue, rounded
+- Decision: orange, diamond
+- Process: gray/neutral
+- Output/End: green
 
 User Request Context:
-Complexity level: ${complexity}
-Style preference: ${style}  
+Complexity: ${complexity}
+Style: ${style}
 Request: ${prompt}
-
-Generate a complete, production-ready React Flow JSON structure that represents this process as a sophisticated, navigable flowchart suitable for enterprise use. Ensure the structure can handle complex business processes with multiple stakeholders, parallel execution paths, and comprehensive process documentation.
 `;
-
 
         console.log('Generating flowchart for prompt:', prompt);
 
@@ -199,16 +126,14 @@ Generate a complete, production-ready React Flow JSON structure that represents 
         const response = await result.response;
         const flowchartData = JSON.parse(response.text());
 
-        // Validate the generated data
+        // Validate
         if (!flowchartData.nodes || !Array.isArray(flowchartData.nodes)) {
             throw new Error('Invalid flowchart data: missing or invalid nodes array');
         }
-
         if (!flowchartData.edges || !Array.isArray(flowchartData.edges)) {
             throw new Error('Invalid flowchart data: missing or invalid edges array');
         }
 
-        // Enhance the flowchart with better styling
         const enhancedFlowchart = enhanceFlowchartStyling(flowchartData);
 
         res.json({
@@ -290,12 +215,11 @@ const getFlowchartFormats = (req, res) => {
 };
 
 /**
- * Enhance flowchart with better styling and positioning
+ * Enhance flowchart styling
  */
 function enhanceFlowchartStyling(flowchart) {
     const enhanced = JSON.parse(JSON.stringify(flowchart));
 
-    // Style enhancements for nodes
     enhanced.nodes = enhanced.nodes.map(node => {
         const baseStyle = {
             backgroundColor: '#ffffff',
@@ -343,7 +267,6 @@ function enhanceFlowchartStyling(flowchart) {
         };
     });
 
-    // Style enhancements for edges
     enhanced.edges = enhanced.edges.map(edge => ({
         ...edge,
         style: {
@@ -364,7 +287,6 @@ function validateReactFlowStructure(data) {
     const errors = [];
     const warnings = [];
 
-    // Check nodes
     if (!data.nodes || !Array.isArray(data.nodes)) {
         errors.push('Missing or invalid nodes array');
     } else {
@@ -377,7 +299,6 @@ function validateReactFlowStructure(data) {
         });
     }
 
-    // Check edges
     if (!data.edges || !Array.isArray(data.edges)) {
         errors.push('Missing or invalid edges array');
     } else {
@@ -388,7 +309,6 @@ function validateReactFlowStructure(data) {
         });
     }
 
-    // Check for orphaned nodes
     if (data.nodes && data.edges) {
         const nodeIds = new Set(data.nodes.map(n => n.id));
         const connectedNodes = new Set();
