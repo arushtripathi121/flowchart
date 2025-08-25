@@ -7,6 +7,7 @@ const cookieParser = require("cookie-parser");
 const flowchartRoutes = require("./routes/flowchart");
 const authRoutes = require("./routes/auth");
 const errorHandler = require("./middleware/errorHandler");
+const diagramRoutes = require('./routes/diagramRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -44,6 +45,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/flowchart", flowchartRoutes);
 app.use("/api/auth", authRoutes);
+app.use('/api/diagrams', diagramRoutes);
 
 app.use(errorHandler);
 

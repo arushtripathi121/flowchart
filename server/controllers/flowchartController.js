@@ -184,7 +184,7 @@ const generateDiagram = async (req, res) => {
         const response = await result.response;
         let diagramData = JSON.parse(response.text());
 
-        // Enhanced processing pipeline
+        // Enhanced processing pipeline with improved joining data
         diagramData = processDiagramData(diagramData, diagramType, style, complexity, diagramConfig);
 
         // Comprehensive validation
@@ -247,9 +247,11 @@ CRITICAL REQUIREMENTS:
 - Generate ${complexityGuide[complexity]} with descriptive, domain-specific labels
 - Use appropriate node types: ${diagramConfig.nodeTypes.join(', ')}
 - Use appropriate edge types: ${diagramConfig.edgeTypes.join(', ')}
-- Ensure all edges reference existing nodes
+- Ensure ALL edges reference existing nodes (CRITICAL: every edge.source and edge.target must have a matching node.id)
 - Follow ${diagramType} conventions and industry best practices
 - Make the diagram comprehensive and informative for the given topic
+- Use meaningful, specific labels - NEVER generic labels like "node1", "step1", "process", etc.
+- Each edge must have a descriptive label that explains the relationship
 
 DIAGRAM TYPE: ${diagramType.toUpperCase()}
 ${diagramSpecificInstructions}
@@ -262,6 +264,7 @@ USER REQUEST: "${prompt}"
 Create a professional ${diagramType} diagram that accurately represents the requested system/process/concept.
 Focus on clarity, logical structure, and domain-specific terminology.
 Ensure the diagram is educational and provides real value to viewers.
+MOST IMPORTANT: Verify that every edge references existing nodes before finalizing the output.
 `;
 };
 
@@ -270,9 +273,10 @@ const getEnhancedDiagramInstructions = (diagramType, config) => {
     const instructions = {
         [DIAGRAM_TYPES.FLOWCHART]: `
 - Use rectangle nodes for processes, diamond for decisions, ellipse for start/end
-- Show clear decision paths with YES/NO labels on edges
+- Show clear decision paths with meaningful YES/NO labels on edges
 - Include proper flow direction and logical sequence
-- Add connector nodes for complex branching`,
+- Add connector nodes for complex branching
+- Each edge should describe the action or condition being executed`,
 
         [DIAGRAM_TYPES.ER_DIAGRAM]: `
 - Create entities (strong rectangles), weak entities (double rectangles)
@@ -404,11 +408,11 @@ const getEnhancedDiagramInstructions = (diagramType, config) => {
     return instructions[diagramType] || `Follow standard ${diagramType} conventions and best practices.`;
 };
 
-// Enhanced data processing with diagram-specific logic
+// Enhanced data processing with diagram-specific logic and improved joining data
 const processDiagramData = (diagramData, diagramType, style, complexity, diagramConfig) => {
     let processed = { ...diagramData };
 
-    // Step 1: Repair structural issues
+    // Step 1: Repair structural issues and fix joining data
     processed = repairDiagramData(processed, diagramType);
 
     // Step 2: Apply diagram-specific enhancements
@@ -420,10 +424,293 @@ const processDiagramData = (diagramData, diagramType, style, complexity, diagram
     // Step 4: Apply styling
     processed = enhanceDiagramStyling(processed, diagramType, style);
 
-    // Step 5: Validate and filter nodes
-    processed = filterValidNodes(processed, diagramType);
+    // Step 5: Validate and filter nodes (but preserve valid connections)
+    processed = filterValidNodesAndEdges(processed, diagramType);
+
+    // Step 6: Final validation and repair pass
+    processed = finalValidationAndRepair(processed);
 
     return processed;
+};
+
+// Comprehensive repair function for diagram data
+const repairDiagramData = (diagramData, diagramType) => {
+    if (!diagramData.nodes || !diagramData.edges) {
+        return diagramData;
+    }
+
+    console.log(`Repairing diagram - Initial: ${diagramData.nodes.length} nodes, ${diagramData.edges.length} edges`);
+
+    // Create a map for faster node lookup
+    const existingNodeIds = new Set(diagramData.nodes.map(node => node.id));
+    const missingNodeIds = new Set();
+    const validEdges = [];
+
+    // First pass: identify missing nodes and validate existing edges
+    diagramData.edges.forEach(edge => {
+        const sourceExists = existingNodeIds.has(edge.source);
+        const targetExists = existingNodeIds.has(edge.target);
+
+        if (sourceExists && targetExists) {
+            // Both nodes exist - enhance the edge
+            const enhancedEdge = enhanceEdgeLabel(edge, diagramData.nodes, diagramType);
+            validEdges.push(enhancedEdge);
+        } else {
+            // Track missing nodes
+            if (!sourceExists) missingNodeIds.add(edge.source);
+            if (!targetExists) missingNodeIds.add(edge.target);
+        }
+    });
+
+    // Second pass: create missing nodes
+    const createdNodes = [];
+    missingNodeIds.forEach(nodeId => {
+        const newNode = createMeaningfulNode(nodeId, diagramData.nodes, diagramType);
+        createdNodes.push(newNode);
+        existingNodeIds.add(nodeId);
+    });
+
+    // Third pass: re-validate all edges with the complete node set
+    const finalEdges = [];
+    diagramData.edges.forEach(edge => {
+        if (existingNodeIds.has(edge.source) && existingNodeIds.has(edge.target)) {
+            const enhancedEdge = enhanceEdgeLabel(edge, [...diagramData.nodes, ...createdNodes], diagramType);
+            finalEdges.push(enhancedEdge);
+        }
+    });
+
+    // Fourth pass: ensure connectivity by connecting isolated nodes
+    const allNodes = [...diagramData.nodes, ...createdNodes];
+    const connectedNodes = new Set();
+
+    finalEdges.forEach(edge => {
+        connectedNodes.add(edge.source);
+        connectedNodes.add(edge.target);
+    });
+
+    const isolatedNodes = allNodes.filter(node => !connectedNodes.has(node.id));
+
+    // Connect isolated nodes to the main flow
+    isolatedNodes.forEach(isolatedNode => {
+        if (connectedNodes.size > 0) {
+            const connectionPoint = findBestConnectionPoint(isolatedNode, Array.from(connectedNodes), allNodes);
+            if (connectionPoint) {
+                const newEdge = createMeaningfulEdge(connectionPoint, isolatedNode.id, allNodes, diagramType);
+                finalEdges.push(newEdge);
+                connectedNodes.add(isolatedNode.id);
+            }
+        }
+    });
+
+    console.log(`Repair complete - Final: ${allNodes.length} nodes, ${finalEdges.length} edges`);
+
+    return {
+        ...diagramData,
+        nodes: allNodes,
+        edges: finalEdges
+    };
+};
+
+// Enhanced edge label function
+const enhanceEdgeLabel = (edge, nodes, diagramType) => {
+    const sourceNode = nodes.find(n => n.id === edge.source);
+    const targetNode = nodes.find(n => n.id === edge.target);
+
+    if (!sourceNode || !targetNode) {
+        return edge;
+    }
+
+    const sourceLabel = sourceNode.data.label?.toLowerCase() || '';
+    const targetLabel = targetNode.data.label?.toLowerCase() || '';
+
+    let enhancedLabel = edge.data?.label || '';
+    let condition = edge.data?.condition || null;
+
+    // Generate meaningful labels based on node types and diagram type
+    if (diagramType === DIAGRAM_TYPES.FLOWCHART) {
+        if (sourceNode.data.shape === 'diamond') {
+            // Decision node - create meaningful conditions
+            if (targetLabel.includes('success') || targetLabel.includes('approve') ||
+                targetLabel.includes('valid') || targetLabel.includes('grant') ||
+                targetLabel.includes('confirm') || targetLabel.includes('accept')) {
+                enhancedLabel = 'Yes';
+                condition = 'Yes';
+            } else if (targetLabel.includes('fail') || targetLabel.includes('reject') ||
+                targetLabel.includes('invalid') || targetLabel.includes('deny') ||
+                targetLabel.includes('cancel') || targetLabel.includes('error')) {
+                enhancedLabel = 'No';
+                condition = 'No';
+            } else {
+                // Use more contextual decision labels
+                enhancedLabel = generateDecisionLabel(sourceLabel, targetLabel);
+                condition = enhancedLabel;
+            }
+        } else if (sourceNode.data.shape === 'ellipse' && sourceLabel.includes('start')) {
+            enhancedLabel = 'Begin Process';
+        } else if (targetNode.data.shape === 'ellipse' && targetLabel.includes('end')) {
+            enhancedLabel = 'Complete';
+        } else {
+            // Generate contextual flow labels
+            enhancedLabel = generateContextualFlowLabel(sourceLabel, targetLabel);
+        }
+    }
+
+    // Ensure we don't have generic labels
+    if (!enhancedLabel || enhancedLabel === 'Process' || enhancedLabel === 'Start' || enhancedLabel === 'End') {
+        enhancedLabel = generateContextualFlowLabel(sourceLabel, targetLabel);
+    }
+
+    return {
+        ...edge,
+        data: {
+            ...edge.data,
+            label: enhancedLabel,
+            condition: condition,
+            relationship: determineRelationshipType(sourceNode, targetNode, diagramType)
+        }
+    };
+};
+
+// Generate decision labels for diamond nodes
+const generateDecisionLabel = (sourceLabel, targetLabel) => {
+    if (sourceLabel.includes('payment') || sourceLabel.includes('transaction')) {
+        return targetLabel.includes('success') ? 'Payment Successful' : 'Payment Failed';
+    }
+    if (sourceLabel.includes('login') || sourceLabel.includes('auth')) {
+        return targetLabel.includes('success') ? 'Authenticated' : 'Authentication Failed';
+    }
+    if (sourceLabel.includes('validation') || sourceLabel.includes('verify')) {
+        return targetLabel.includes('valid') ? 'Valid' : 'Invalid';
+    }
+    if (sourceLabel.includes('eligible') || sourceLabel.includes('approve')) {
+        return targetLabel.includes('approve') ? 'Approved' : 'Rejected';
+    }
+    return Math.random() > 0.5 ? 'Yes' : 'No';
+};
+
+// Generate contextual flow labels
+const generateContextualFlowLabel = (sourceLabel, targetLabel) => {
+    const flowMappings = {
+        'login': 'authenticate user',
+        'validate': 'check validity',
+        'process': 'execute operation',
+        'payment': 'process payment',
+        'verification': 'verify data',
+        'approval': 'seek authorization',
+        'account': 'access account',
+        'transaction': 'complete transaction',
+        'submit': 'send for processing',
+        'review': 'evaluate request',
+        'confirm': 'validate information',
+        'update': 'modify record',
+        'check': 'verify status',
+        'generate': 'create output',
+        'send': 'transmit data',
+        'receive': 'get input',
+        'store': 'save data',
+        'retrieve': 'fetch data'
+    };
+
+    // Find the best matching flow mapping
+    for (const [key, value] of Object.entries(flowMappings)) {
+        if (sourceLabel.includes(key) || targetLabel.includes(key)) {
+            return value;
+        }
+    }
+
+    // Fallback to generic but meaningful labels
+    if (sourceLabel.includes('start')) return 'initiate';
+    if (targetLabel.includes('end')) return 'finish';
+    if (sourceLabel.includes('decision') || sourceLabel.includes('check')) return 'evaluate';
+
+    return 'proceed to next step';
+};
+
+// Find best connection point for isolated nodes
+const findBestConnectionPoint = (isolatedNode, connectedNodeIds, allNodes) => {
+    const isolatedLabel = isolatedNode.data.label?.toLowerCase() || '';
+
+    // Find semantically related nodes
+    for (const nodeId of connectedNodeIds) {
+        const connectedNode = allNodes.find(n => n.id === nodeId);
+        if (connectedNode) {
+            const connectedLabel = connectedNode.data.label?.toLowerCase() || '';
+
+            // Check for semantic relationships
+            if (areRelatedNodes(isolatedLabel, connectedLabel)) {
+                return nodeId;
+            }
+        }
+    }
+
+    // If no semantic match, connect to a process node or the first available node
+    const processNodes = connectedNodeIds.filter(nodeId => {
+        const node = allNodes.find(n => n.id === nodeId);
+        return node && node.data.shape === 'rectangle';
+    });
+
+    return processNodes.length > 0 ? processNodes[0] : connectedNodeIds[0];
+};
+
+// Check if two nodes are semantically related
+const areRelatedNodes = (label1, label2) => {
+    const relationshipGroups = [
+        ['login', 'authentication', 'user', 'credential', 'password', 'verify'],
+        ['payment', 'transaction', 'money', 'transfer', 'amount', 'billing', 'charge'],
+        ['account', 'balance', 'customer', 'profile', 'user', 'member'],
+        ['loan', 'credit', 'approve', 'eligibility', 'application', 'review'],
+        ['verification', 'validate', 'check', 'confirm', 'verify', 'audit'],
+        ['process', 'execute', 'run', 'perform', 'operate', 'handle'],
+        ['update', 'modify', 'change', 'edit', 'alter', 'revise'],
+        ['generate', 'create', 'produce', 'make', 'build', 'construct'],
+        ['send', 'transmit', 'deliver', 'forward', 'dispatch', 'submit'],
+        ['receive', 'get', 'obtain', 'fetch', 'retrieve', 'collect']
+    ];
+
+    for (const group of relationshipGroups) {
+        const label1Match = group.some(word => label1.includes(word));
+        const label2Match = group.some(word => label2.includes(word));
+
+        if (label1Match && label2Match) {
+            return true;
+        }
+    }
+
+    return false;
+};
+
+// Create meaningful edge between nodes
+const createMeaningfulEdge = (sourceId, targetId, nodes, diagramType) => {
+    const sourceNode = nodes.find(n => n.id === sourceId);
+    const targetNode = nodes.find(n => n.id === targetId);
+
+    const edgeId = `edge_${sourceId}_${targetId}`;
+    let label = 'proceed to';
+    let condition = null;
+
+    if (sourceNode && targetNode) {
+        const sourceLabel = sourceNode.data.label?.toLowerCase() || '';
+        const targetLabel = targetNode.data.label?.toLowerCase() || '';
+
+        label = generateContextualFlowLabel(sourceLabel, targetLabel);
+
+        if (sourceNode.data.shape === 'diamond') {
+            label = generateDecisionLabel(sourceLabel, targetLabel);
+            condition = label.includes('Yes') || label.includes('Success') ||
+                label.includes('Valid') || label.includes('Approved') ? 'Yes' : 'No';
+        }
+    }
+
+    return {
+        id: edgeId,
+        source: sourceId,
+        target: targetId,
+        data: {
+            label: label,
+            condition: condition,
+            relationship: determineRelationshipType(sourceNode, targetNode, diagramType)
+        }
+    };
 };
 
 // Apply diagram-type specific enhancements
@@ -521,6 +808,77 @@ const applyDiagramTypeEnhancements = (diagramData, diagramType, config) => {
     return enhanced;
 };
 
+// Filter valid nodes and edges while preserving connections
+const filterValidNodesAndEdges = (diagramData, diagramType) => {
+    if (!diagramData.nodes || !Array.isArray(diagramData.nodes)) {
+        return diagramData;
+    }
+
+    const originalCount = diagramData.nodes.length;
+
+    // Filter out only truly invalid nodes, but be more lenient
+    const filteredNodes = diagramData.nodes.filter(node => {
+        if (!node.data || typeof node.data !== 'object') return false;
+        if (!node.data.label || typeof node.data.label !== 'string') return false;
+
+        const label = node.data.label.trim();
+
+        // Only filter out completely generic or empty labels
+        const isJustNumber = /^\d+$/.test(label);
+        const isCompletelyGeneric = /^(node|element|item|step)$/i.test(label);
+        const isEmpty = label.length === 0;
+
+        return !(isJustNumber || isCompletelyGeneric || isEmpty);
+    });
+
+    console.log(`Node filtering: ${originalCount} -> ${filteredNodes.length} nodes`);
+
+    const validNodeIds = new Set(filteredNodes.map(node => node.id));
+    const filteredEdges = (diagramData.edges || []).filter(edge =>
+        validNodeIds.has(edge.source) && validNodeIds.has(edge.target)
+    );
+
+    return {
+        ...diagramData,
+        nodes: filteredNodes,
+        edges: filteredEdges
+    };
+};
+
+// Final validation and repair pass
+const finalValidationAndRepair = (diagramData) => {
+    const nodeIds = new Set(diagramData.nodes.map(node => node.id));
+
+    // Remove any edges that still reference non-existent nodes
+    const validEdges = diagramData.edges.filter(edge =>
+        nodeIds.has(edge.source) && nodeIds.has(edge.target)
+    );
+
+    // Ensure we have some connections
+    if (validEdges.length === 0 && diagramData.nodes.length > 1) {
+        // Create a simple linear connection between first few nodes
+        for (let i = 0; i < Math.min(diagramData.nodes.length - 1, 5); i++) {
+            const source = diagramData.nodes[i];
+            const target = diagramData.nodes[i + 1];
+
+            validEdges.push({
+                id: `final_edge_${i}`,
+                source: source.id,
+                target: target.id,
+                data: {
+                    label: 'proceed to',
+                    relationship: 'flow'
+                }
+            });
+        }
+    }
+
+    return {
+        ...diagramData,
+        edges: validEdges
+    };
+};
+
 // Helper functions for diagram-specific enhancements
 const generateClassAttributes = (className) => {
     const commonAttributes = {
@@ -573,6 +931,10 @@ const generateEntityAttributes = (entityName) => {
     return [...baseAttributes, 'name', 'description', 'status'];
 };
 
+const generatePrimaryKey = (entityName) => {
+    return `${entityName.toLowerCase().replace(/\s+/g, '_')}_id`;
+};
+
 const detectNetworkDeviceType = (label) => {
     const types = {
         'router': ['router', 'gateway'],
@@ -622,14 +984,36 @@ const enhanceNodePositioning = (diagramData, diagramType, layoutType) => {
     return enhanced;
 };
 
-// New positioning algorithms
+// Positioning algorithms
+const positionHierarchicalDiagram = (nodes, edges) => {
+    const positioned = [...nodes];
+    const levels = calculateNodeLayers(nodes, edges);
+    const spacing = { x: 200, y: 120 };
+
+    Object.keys(levels).forEach(level => {
+        const levelNodes = levels[level];
+        const levelY = parseInt(level) * spacing.y + 100;
+
+        levelNodes.forEach((nodeId, index) => {
+            const node = positioned.find(n => n.id === nodeId);
+            if (node) {
+                node.position = {
+                    x: (index - (levelNodes.length - 1) / 2) * spacing.x + 400,
+                    y: levelY
+                };
+            }
+        });
+    });
+
+    return positioned;
+};
+
 const positionOrganicDiagram = (nodes, edges) => {
     const positioned = [...nodes];
     const centerX = 400;
     const centerY = 300;
     const radius = Math.min(200 + nodes.length * 10, 350);
 
-    // Use force-directed positioning simulation
     positioned.forEach((node, index) => {
         const angle = (index / nodes.length) * 2 * Math.PI;
         const radiusVariation = radius * (0.7 + Math.random() * 0.6);
@@ -648,16 +1032,12 @@ const positionSequenceDiagram = (nodes, edges) => {
     const spacing = { x: 200, y: 100 };
     const baseY = 100;
 
-    // Separate lifelines and messages
     const lifelines = positioned.filter(node =>
         node.data?.category === 'lifeline' || node.data?.label?.toLowerCase().includes('actor')
     );
 
-    const messages = positioned.filter(node =>
-        !lifelines.includes(node)
-    );
+    const messages = positioned.filter(node => !lifelines.includes(node));
 
-    // Position lifelines horizontally
     lifelines.forEach((node, index) => {
         node.position = {
             x: index * spacing.x + 150,
@@ -665,7 +1045,6 @@ const positionSequenceDiagram = (nodes, edges) => {
         };
     });
 
-    // Position messages vertically
     messages.forEach((node, index) => {
         node.position = {
             x: 300,
@@ -699,6 +1078,69 @@ const positionLayeredDiagram = (nodes, edges) => {
     return positioned;
 };
 
+const positionRadialDiagram = (nodes, edges) => {
+    const positioned = [...nodes];
+    const centerX = 400;
+    const centerY = 300;
+    const radius = Math.min(150 + nodes.length * 15, 400);
+
+    const connections = {};
+    edges.forEach(edge => {
+        connections[edge.source] = (connections[edge.source] || 0) + 1;
+        connections[edge.target] = (connections[edge.target] || 0) + 1;
+    });
+
+    const centralNodeId = Object.keys(connections).reduce((a, b) =>
+        connections[a] > connections[b] ? a : b, nodes[0]?.id);
+
+    positioned.forEach((node, index) => {
+        if (node.id === centralNodeId) {
+            node.position = { x: centerX, y: centerY };
+        } else {
+            const angle = (index / (nodes.length - 1)) * 2 * Math.PI;
+            node.position = {
+                x: centerX + radius * Math.cos(angle),
+                y: centerY + radius * Math.sin(angle)
+            };
+        }
+    });
+
+    return positioned;
+};
+
+const positionTimelineDiagram = (nodes) => {
+    const positioned = [...nodes];
+    const spacing = 200;
+    const baseY = 300;
+
+    positioned.forEach((node, index) => {
+        node.position = {
+            x: index * spacing + 100,
+            y: baseY + (index % 2 === 0 ? -50 : 50)
+        };
+    });
+
+    return positioned;
+};
+
+const positionGridDiagram = (nodes) => {
+    const positioned = [...nodes];
+    const cols = Math.ceil(Math.sqrt(nodes.length));
+    const spacing = { x: 220, y: 140 };
+
+    positioned.forEach((node, index) => {
+        const row = Math.floor(index / cols);
+        const col = index % cols;
+
+        node.position = {
+            x: col * spacing.x + 100,
+            y: row * spacing.y + 100
+        };
+    });
+
+    return positioned;
+};
+
 // Enhanced schema generator
 const getDiagramSchema = (diagramType) => {
     const baseSchema = {
@@ -716,7 +1158,7 @@ const getDiagramSchema = (diagramType) => {
                             properties: {
                                 label: {
                                     type: "string",
-                                    description: "Descriptive, meaningful label - never generic like 'node1'"
+                                    description: "Descriptive, meaningful label - never generic like 'node1' or 'step1'"
                                 },
                                 description: { type: "string" },
                                 category: { type: "string" },
@@ -742,12 +1184,12 @@ const getDiagramSchema = (diagramType) => {
                     type: "object",
                     properties: {
                         id: { type: "string" },
-                        source: { type: "string" },
-                        target: { type: "string" },
+                        source: { type: "string", description: "Must reference an existing node.id" },
+                        target: { type: "string", description: "Must reference an existing node.id" },
                         data: {
                             type: "object",
                             properties: {
-                                label: { type: "string" },
+                                label: { type: "string", description: "Descriptive label explaining the relationship" },
                                 relationship: { type: "string" }
                             }
                         }
@@ -801,8 +1243,6 @@ const getDiagramSchema = (diagramType) => {
     return baseSchema;
 };
 
-// Rest of the utility functions (keeping existing ones and adding new ones)
-
 // Generate meaningful data helpers
 const generateIPAddress = () => {
     return `192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
@@ -834,7 +1274,7 @@ const generateCardinality = () => {
     return cardinalities[Math.floor(Math.random() * cardinalities.length)];
 };
 
-// Enhanced validation
+// Enhanced validation with better error reporting
 const validateDiagramData = (data, diagramType, config) => {
     const errors = [];
     const warnings = [];
@@ -850,22 +1290,17 @@ const validateDiagramData = (data, diagramType, config) => {
         return { isValid: false, errors, warnings, meaningfulNodes };
     }
 
-    // Validate node count against configuration
-    if (data.nodes.length < config.minNodes) {
-        warnings.push(`Node count (${data.nodes.length}) below recommended minimum (${config.minNodes})`);
-    }
-
-    if (data.nodes.length > config.maxNodes * 1.5) {
-        warnings.push(`Node count (${data.nodes.length}) significantly above maximum (${config.maxNodes})`);
-    }
-
+    // Create a map for faster node lookup
+    const nodeMap = new Map();
     const nodeIds = new Set();
 
+    // Validate nodes and build lookup structures
     data.nodes.forEach((node, index) => {
         if (!node.id) {
             errors.push(`Node ${index}: missing id`);
         } else {
             nodeIds.add(node.id);
+            nodeMap.set(node.id, node);
         }
 
         if (!node.data || !node.data.label) {
@@ -886,99 +1321,70 @@ const validateDiagramData = (data, diagramType, config) => {
         }
     });
 
+    // Validate edges with enhanced checking
+    const edgeValidation = {
+        validEdges: 0,
+        invalidReferences: 0,
+        duplicateEdges: new Set()
+    };
+
     data.edges.forEach((edge, index) => {
         if (!edge.source || !edge.target) {
             errors.push(`Edge ${index}: missing source or target`);
+            return;
         }
-        if (edge.source && !nodeIds.has(edge.source)) {
-            errors.push(`Edge ${index}: source '${edge.source}' not found`);
+
+        const sourceExists = nodeIds.has(edge.source);
+        const targetExists = nodeIds.has(edge.target);
+
+        if (!sourceExists) {
+            errors.push(`Edge ${index}: source '${edge.source}' not found in nodes`);
+            edgeValidation.invalidReferences++;
         }
-        if (edge.target && !nodeIds.has(edge.target)) {
-            errors.push(`Edge ${index}: target '${edge.target}' not found`);
+
+        if (!targetExists) {
+            errors.push(`Edge ${index}: target '${edge.target}' not found in nodes`);
+            edgeValidation.invalidReferences++;
+        }
+
+        if (sourceExists && targetExists) {
+            edgeValidation.validEdges++;
+
+            // Check for duplicate edges
+            const edgeKey = `${edge.source}-${edge.target}`;
+            if (edgeValidation.duplicateEdges.has(edgeKey)) {
+                warnings.push(`Duplicate edge found: ${edge.source} -> ${edge.target}`);
+            } else {
+                edgeValidation.duplicateEdges.add(edgeKey);
+            }
         }
     });
+
+    // Validate node count against configuration
+    if (data.nodes.length < config.minNodes) {
+        warnings.push(`Node count (${data.nodes.length}) below recommended minimum (${config.minNodes})`);
+    }
+
+    if (data.nodes.length > config.maxNodes * 1.5) {
+        warnings.push(`Node count (${data.nodes.length}) significantly above maximum (${config.maxNodes})`);
+    }
+
+    // Check connectivity
+    if (data.nodes.length > 1 && edgeValidation.validEdges === 0) {
+        warnings.push('No valid connections found between nodes');
+    }
 
     return {
         isValid: errors.length === 0,
         errors,
         warnings,
-        meaningfulNodes
+        meaningfulNodes,
+        edgeValidation
     };
 };
 
-// Keep all existing utility functions and add new exports
-module.exports = {
-    generateDiagram,
-    validateDiagramStructure: async (req, res) => {
-        try {
-            const { diagramData, diagramType } = req.body;
-
-            if (!diagramData) {
-                return res.status(400).json({
-                    error: 'Missing data',
-                    message: 'Please provide diagram data to validate'
-                });
-            }
-
-            const config = DIAGRAM_CONFIGS[diagramType] || DIAGRAM_CONFIGS[DIAGRAM_TYPES.FLOWCHART];
-            const processedData = processDiagramData(diagramData, diagramType, 'modern', 'medium', config);
-            const validation = validateDiagramData(processedData, diagramType, config);
-
-            res.json({
-                isValid: validation.isValid,
-                errors: validation.errors,
-                warnings: validation.warnings,
-                nodeCount: processedData.nodes?.length || 0,
-                edgeCount: processedData.edges?.length || 0,
-                meaningfulNodes: validation.meaningfulNodes,
-                diagramType: diagramType || 'unknown',
-                processed: processedData
-            });
-
-        } catch (error) {
-            console.error('Error validating diagram:', error);
-            res.status(500).json({
-                error: 'Validation failed',
-                message: error.message
-            });
-        }
-    },
-    getDiagramFormats: (req, res) => {
-        const formatInfo = {};
-
-        Object.entries(DIAGRAM_CONFIGS).forEach(([type, config]) => {
-            formatInfo[type] = {
-                nodeTypes: config.nodeTypes,
-                edgeTypes: config.edgeTypes,
-                layout: config.layout,
-                nodeRange: `${config.minNodes}-${config.maxNodes}`,
-                description: getEnhancedDiagramInstructions(type, config).split('\n')[1]?.trim()
-            };
-        });
-
-        res.json({
-            supportedTypes: Object.values(DIAGRAM_TYPES),
-            diagramConfigurations: formatInfo,
-            complexityLevels: {
-                simple: 'Basic structure with essential elements',
-                medium: 'Detailed structure with comprehensive elements',
-                complex: 'Advanced structure with extensive detail',
-                enterprise: 'Full enterprise-level comprehensive structure'
-            },
-            styleOptions: ['modern', 'minimal', 'colorful', 'enterprise'],
-            layoutOptions: ['hierarchical', 'organic', 'radial', 'timeline', 'sequence', 'layered'],
-            features: {
-                positioning: 'Advanced ELK-based layout algorithms',
-                validation: 'Comprehensive validation with diagram-specific rules',
-                styling: 'Professional styling with diagram-aware theming',
-                enhancement: 'Intelligent content enhancement based on diagram type'
-            }
-        });
-    }
-};
-
-// Additional utility functions that were referenced but not defined
-const calculateNodeLevels = (nodes, edges) => {
+// Additional utility functions
+const calculateNodeLayers = (nodes, edges) => {
     const levels = {};
     const visited = new Set();
     const hasIncoming = new Set(edges.map(e => e.target));
@@ -1013,37 +1419,6 @@ const calculateNodeLevels = (nodes, edges) => {
     return levels;
 };
 
-const repairDiagramData = (diagramData, diagramType) => {
-    if (!diagramData.nodes || !diagramData.edges) {
-        return diagramData;
-    }
-
-    const existingNodeIds = new Set(diagramData.nodes.map(node => node.id));
-    const missingNodeIds = new Set();
-
-    diagramData.edges.forEach(edge => {
-        if (!existingNodeIds.has(edge.source)) missingNodeIds.add(edge.source);
-        if (!existingNodeIds.has(edge.target)) missingNodeIds.add(edge.target);
-    });
-
-    const createdNodes = [];
-    missingNodeIds.forEach(nodeId => {
-        const newNode = createMeaningfulNode(nodeId, diagramData.nodes, diagramType);
-        createdNodes.push(newNode);
-        existingNodeIds.add(nodeId);
-    });
-
-    const validEdges = diagramData.edges.filter(edge =>
-        existingNodeIds.has(edge.source) && existingNodeIds.has(edge.target)
-    );
-
-    return {
-        ...diagramData,
-        nodes: [...diagramData.nodes, ...createdNodes],
-        edges: validEdges
-    };
-};
-
 const createMeaningfulNode = (nodeId, existingNodes, diagramType) => {
     const position = {
         x: (existingNodes.length % 5) * 220 + 100,
@@ -1051,9 +1426,28 @@ const createMeaningfulNode = (nodeId, existingNodes, diagramType) => {
     };
 
     let label = 'Process Step';
-    if (nodeId.toLowerCase().includes('auth')) label = 'Authentication';
-    else if (nodeId.toLowerCase().includes('valid')) label = 'Validation';
-    else if (nodeId.toLowerCase().includes('process')) label = 'Processing';
+    let shape = 'rectangle';
+
+    // Generate meaningful labels based on nodeId
+    if (nodeId.toLowerCase().includes('auth')) {
+        label = 'Authentication';
+    } else if (nodeId.toLowerCase().includes('valid')) {
+        label = 'Validation';
+    } else if (nodeId.toLowerCase().includes('process')) {
+        label = 'Processing';
+    } else if (nodeId.toLowerCase().includes('check')) {
+        label = 'Verification';
+        shape = 'diamond';
+    } else if (nodeId.toLowerCase().includes('start')) {
+        label = 'Start Process';
+        shape = 'ellipse';
+    } else if (nodeId.toLowerCase().includes('end')) {
+        label = 'End Process';
+        shape = 'ellipse';
+    } else if (nodeId.toLowerCase().includes('decision')) {
+        label = 'Decision Point';
+        shape = 'diamond';
+    }
 
     return {
         id: nodeId,
@@ -1061,43 +1455,10 @@ const createMeaningfulNode = (nodeId, existingNodes, diagramType) => {
         position,
         data: {
             label,
-            description: `Generated for ${nodeId}`,
+            description: `Auto-generated node for ${nodeId}`,
             category: 'auto-generated',
-            shape: 'rectangle'
+            shape: shape
         }
-    };
-};
-
-const filterValidNodes = (diagramData, diagramType) => {
-    if (!diagramData.nodes || !Array.isArray(diagramData.nodes)) {
-        return diagramData;
-    }
-
-    const originalCount = diagramData.nodes.length;
-
-    const filteredNodes = diagramData.nodes.filter(node => {
-        if (!node.data || typeof node.data !== 'object') return false;
-        if (!node.data.label || typeof node.data.label !== 'string') return false;
-
-        const label = node.data.label.trim();
-        const isNodeNumber = /^node[\s_]*\d+$/i.test(label);
-        const isJustNumber = /^\d+$/.test(label);
-        const isGeneric = /^(node|element|item|step)$/i.test(label);
-
-        return !(isNodeNumber || isJustNumber || isGeneric) && label.length > 2;
-    });
-
-    console.log(`Node filtering: ${originalCount} -> ${filteredNodes.length} nodes`);
-
-    const validNodeIds = new Set(filteredNodes.map(node => node.id));
-    const filteredEdges = (diagramData.edges || []).filter(edge =>
-        validNodeIds.has(edge.source) && validNodeIds.has(edge.target)
-    );
-
-    return {
-        ...diagramData,
-        nodes: filteredNodes,
-        edges: filteredEdges
     };
 };
 
@@ -1140,6 +1501,29 @@ const determineActualComplexity = (nodeCount) => {
     return 'enterprise';
 };
 
+// Determine relationship type between nodes
+const determineRelationshipType = (sourceNode, targetNode, diagramType) => {
+    if (!sourceNode || !targetNode) return 'flow';
+
+    const sourceShape = sourceNode.data.shape;
+    const targetShape = targetNode.data.shape;
+
+    if (diagramType === DIAGRAM_TYPES.FLOWCHART) {
+        if (sourceShape === 'ellipse' && sourceNode.data.label?.toLowerCase().includes('start')) {
+            return 'initiate';
+        }
+        if (sourceShape === 'diamond') {
+            return 'decision';
+        }
+        if (targetShape === 'ellipse' && targetNode.data.label?.toLowerCase().includes('end')) {
+            return 'terminate';
+        }
+        return 'process_flow';
+    }
+
+    return 'default';
+};
+
 // Additional helper functions for specific diagram types
 const detectUMLRelationship = (edge, nodes) => {
     const relationships = ['inheritance', 'composition', 'aggregation', 'association', 'dependency'];
@@ -1160,9 +1544,8 @@ const generateDepartment = (label) => {
 };
 
 const calculateOrgLevel = (node, edges) => {
-    // Calculate organizational level based on incoming edges
     const incomingEdges = edges.filter(e => e.target === node.id);
-    return incomingEdges.length > 0 ? 2 : 1; // Simplified level calculation
+    return incomingEdges.length > 0 ? 2 : 1;
 };
 
 const generateDeviceSpecs = (deviceName) => {
@@ -1181,89 +1564,74 @@ const generateDeviceSpecs = (deviceName) => {
     return key ? specs[key] : 'Standard configuration';
 };
 
-const positionHierarchicalDiagram = (nodes, edges) => {
-    const positioned = [...nodes];
-    const levels = calculateNodeLevels(nodes, edges);
-    const spacing = { x: 200, y: 120 };
+// Export the main functions
+module.exports = {
+    generateDiagram,
+    validateDiagramStructure: async (req, res) => {
+        try {
+            const { diagramData, diagramType } = req.body;
 
-    Object.keys(levels).forEach(level => {
-        const levelNodes = levels[level];
-        const levelY = parseInt(level) * spacing.y + 100;
+            if (!diagramData) {
+                return res.status(400).json({
+                    error: 'Missing data',
+                    message: 'Please provide diagram data to validate'
+                });
+            }
 
-        levelNodes.forEach((nodeId, index) => {
-            const node = positioned.find(n => n.id === nodeId);
-            if (node) {
-                node.position = {
-                    x: (index - (levelNodes.length - 1) / 2) * spacing.x + 400,
-                    y: levelY
-                };
+            const config = DIAGRAM_CONFIGS[diagramType] || DIAGRAM_CONFIGS[DIAGRAM_TYPES.FLOWCHART];
+            const processedData = processDiagramData(diagramData, diagramType, 'modern', 'medium', config);
+            const validation = validateDiagramData(processedData, diagramType, config);
+
+            res.json({
+                isValid: validation.isValid,
+                errors: validation.errors,
+                warnings: validation.warnings,
+                nodeCount: processedData.nodes?.length || 0,
+                edgeCount: processedData.edges?.length || 0,
+                meaningfulNodes: validation.meaningfulNodes,
+                diagramType: diagramType || 'unknown',
+                processed: processedData,
+                edgeValidation: validation.edgeValidation
+            });
+
+        } catch (error) {
+            console.error('Error validating diagram:', error);
+            res.status(500).json({
+                error: 'Validation failed',
+                message: error.message
+            });
+        }
+    },
+    getDiagramFormats: (req, res) => {
+        const formatInfo = {};
+
+        Object.entries(DIAGRAM_CONFIGS).forEach(([type, config]) => {
+            formatInfo[type] = {
+                nodeTypes: config.nodeTypes,
+                edgeTypes: config.edgeTypes,
+                layout: config.layout,
+                nodeRange: `${config.minNodes}-${config.maxNodes}`,
+                description: getEnhancedDiagramInstructions(type, config).split('\n')[1]?.trim()
+            };
+        });
+
+        res.json({
+            supportedTypes: Object.values(DIAGRAM_TYPES),
+            diagramConfigurations: formatInfo,
+            complexityLevels: {
+                simple: 'Basic structure with essential elements',
+                medium: 'Detailed structure with comprehensive elements',
+                complex: 'Advanced structure with extensive detail',
+                enterprise: 'Full enterprise-level comprehensive structure'
+            },
+            styleOptions: ['modern', 'minimal', 'colorful', 'enterprise'],
+            layoutOptions: ['hierarchical', 'organic', 'radial', 'timeline', 'sequence', 'layered'],
+            features: {
+                positioning: 'Advanced positioning algorithms with semantic understanding',
+                validation: 'Comprehensive validation with diagram-specific rules and edge relationship checking',
+                styling: 'Professional styling with diagram-aware theming',
+                enhancement: 'Intelligent content enhancement with meaningful labels and connections'
             }
         });
-    });
-
-    return positioned;
-};
-
-const positionRadialDiagram = (nodes, edges) => {
-    const positioned = [...nodes];
-    const centerX = 400;
-    const centerY = 300;
-    const radius = Math.min(150 + nodes.length * 15, 400);
-
-    // Find central node (most connected)
-    const connections = {};
-    edges.forEach(edge => {
-        connections[edge.source] = (connections[edge.source] || 0) + 1;
-        connections[edge.target] = (connections[edge.target] || 0) + 1;
-    });
-
-    const centralNodeId = Object.keys(connections).reduce((a, b) =>
-        connections[a] > connections[b] ? a : b, nodes[0]?.id);
-
-    positioned.forEach((node, index) => {
-        if (node.id === centralNodeId) {
-            node.position = { x: centerX, y: centerY };
-        } else {
-            const angle = (index / (nodes.length - 1)) * 2 * Math.PI;
-            node.position = {
-                x: centerX + radius * Math.cos(angle),
-                y: centerY + radius * Math.sin(angle)
-            };
-        }
-    });
-
-    return positioned;
-};
-
-const positionTimelineDiagram = (nodes) => {
-    const positioned = [...nodes];
-    const spacing = 200;
-    const baseY = 300;
-
-    positioned.forEach((node, index) => {
-        node.position = {
-            x: index * spacing + 100,
-            y: baseY + (index % 2 === 0 ? -50 : 50) // Alternating heights
-        };
-    });
-
-    return positioned;
-};
-
-const positionGridDiagram = (nodes) => {
-    const positioned = [...nodes];
-    const cols = Math.ceil(Math.sqrt(nodes.length));
-    const spacing = { x: 220, y: 140 };
-
-    positioned.forEach((node, index) => {
-        const row = Math.floor(index / cols);
-        const col = index % cols;
-
-        node.position = {
-            x: col * spacing.x + 100,
-            y: row * spacing.y + 100
-        };
-    });
-
-    return positioned;
+    }
 };

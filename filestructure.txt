@@ -47,17 +47,20 @@
         |-- googleConfig.js
     |-- controllers
         |-- authController.js
+        |-- diagramController.js
         |-- flowchartController.js
     |-- index.js
     |-- middleware
         |-- auth.js
         |-- errorHandler.js
-        |-- User.js
     |-- models
+        |-- Diagram.js
+        |-- Template.js
         |-- User.js
     |-- package-lock.json
     |-- package.json
     |-- routes
         |-- auth.js
+        |-- diagramRoutes.js
         |-- flowchart.js
     |-- vercel.json

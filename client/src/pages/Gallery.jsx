@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
-import { useFlowchart } from '../hooks/useFlowchart';
+import { useEffect, useState } from 'react';
+import { useDiagramAPI } from '../services/api'; // hook with user context
 import { Link } from 'react-router-dom';
 import {
     HiCollection,
@@ -11,7 +12,45 @@ import {
 import { FiLayers, FiLink } from 'react-icons/fi';
 
 const Gallery = () => {
-    const { history, loadFromHistory } = useFlowchart();
+    const diagramAPI = useDiagramAPI();
+    const [diagrams, setDiagrams] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    // Fetch diagrams on mount
+    // Fetch diagrams on mount
+    useEffect(() => {
+        let isMounted = true;
+
+        const fetchDiagrams = async () => {
+            try {
+                const result = await diagramAPI.getUserDiagrams();
+                if (isMounted) setDiagrams(result || []);
+            } catch (error) {
+                console.error("Failed to load diagrams:", error);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        };
+
+        fetchDiagrams();
+
+        return () => {
+            isMounted = false;
+        };
+        // ✅ empty deps so it runs only once when Gallery mounts
+    }, []);
+
+
+    const handleOpenDiagram = async (diagram) => {
+        try {
+            const fullDiagram = await diagramAPI.getDiagramById(diagram._id || diagram.id);
+            console.log("Loaded diagram:", fullDiagram);
+            // 👉 navigate to DiagramCanvas page or load it in context
+            // e.g., navigate(`/canvas/${diagram._id}`)
+        } catch (error) {
+            console.error("Failed to open diagram:", error);
+        }
+    };
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8">
@@ -34,11 +73,15 @@ const Gallery = () => {
                         Flowchart Gallery
                     </h1>
                     <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                        Your recently generated flowcharts are stored here for easy access and reuse
+                        Your saved flowcharts are stored here for easy access and reuse
                     </p>
                 </motion.div>
 
-                {history.length === 0 ? (
+                {/* Loading state */}
+                {loading ? (
+                    <div className="text-center text-gray-500">Loading diagrams...</div>
+                ) : diagrams.length === 0 ? (
+                    // Empty state
                     <motion.div
                         className="text-center py-20"
                         initial={{ opacity: 0 }}
@@ -73,52 +116,55 @@ const Gallery = () => {
                         </div>
                     </motion.div>
                 ) : (
+                    // Diagrams grid
                     <motion.div
                         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.3, duration: 0.6 }}
                     >
-                        {history.map((flowchart, index) => (
+                        {diagrams.map((diagram, index) => (
                             <motion.div
-                                key={flowchart.id}
+                                key={diagram._id || diagram.id}
                                 className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden cursor-pointer group hover:shadow-2xl transition-all duration-500"
                                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 transition={{ delay: index * 0.1, duration: 0.5 }}
                                 whileHover={{ y: -8, scale: 1.02 }}
-                                onClick={() => loadFromHistory(flowchart)}
+                                onClick={() => handleOpenDiagram(diagram)}
                             >
                                 <div className="p-6">
                                     <div className="flex items-start justify-between mb-4">
                                         <h4 className="text-xl font-bold text-gray-800 line-clamp-2 flex-1 leading-tight">
-                                            {flowchart.prompt.slice(0, 80)}
-                                            {flowchart.prompt.length > 80 && '...'}
+                                            {diagram.title || diagram.prompt?.slice(0, 80)}
+                                            {diagram.prompt && diagram.prompt.length > 80 && '...'}
                                         </h4>
                                     </div>
 
                                     <div className="flex items-center text-sm text-gray-500 mb-4">
                                         <HiCalendar className="w-4 h-4 mr-2" />
-                                        <span>{new Date(flowchart.timestamp).toLocaleDateString('en-US', {
-                                            year: 'numeric',
-                                            month: 'long',
-                                            day: 'numeric'
-                                        })}</span>
+                                        <span>
+                                            {new Date(diagram.createdAt || diagram.timestamp).toLocaleDateString('en-US', {
+                                                year: 'numeric',
+                                                month: 'long',
+                                                day: 'numeric'
+                                            })}
+                                        </span>
                                     </div>
 
                                     <div className="flex items-center justify-between text-sm">
                                         <div className="flex items-center space-x-4">
                                             <div className="flex items-center space-x-1 px-3 py-1 bg-blue-50 rounded-full">
                                                 <FiLayers className="w-4 h-4 text-blue-600" />
-                                                <span className="text-blue-700 font-medium">{flowchart.metadata.nodeCount}</span>
+                                                <span className="text-blue-700 font-medium">{diagram.metadata?.nodeCount || 0}</span>
                                             </div>
                                             <div className="flex items-center space-x-1 px-3 py-1 bg-purple-50 rounded-full">
                                                 <FiLink className="w-4 h-4 text-purple-600" />
-                                                <span className="text-purple-700 font-medium">{flowchart.metadata.edgeCount}</span>
+                                                <span className="text-purple-700 font-medium">{diagram.metadata?.edgeCount || 0}</span>
                                             </div>
                                         </div>
                                         <span className="bg-gradient-to-r from-blue-100 to-purple-100 text-blue-800 px-3 py-1 rounded-full text-xs font-semibold capitalize">
-                                            {flowchart.metadata.style}
+                                            {diagram.metadata?.style || "modern"}
                                         </span>
                                     </div>
                                 </div>
