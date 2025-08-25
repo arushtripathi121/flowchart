@@ -18,18 +18,23 @@ import {
   BaseEdge,
   getBezierPath,
   EdgeLabelRenderer,
-  NodeResizer
+  NodeResizer,
+  getNodesBounds,
+  getViewportForBounds,
 } from '@xyflow/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toPng } from 'html-to-image';
 import { saveAs } from 'file-saver';
-import dagre from '@dagrejs/dagre';
+import ELK from 'elkjs/lib/elk.bundled.js';
+import chroma from 'chroma-js';
 import {
   HiX,
   HiDownload,
   HiPlus,
   HiTrash,
-  HiPencil,
+  HiSparkles,
+  HiViewGrid,
+  HiCog,
 } from 'react-icons/hi';
 import {
   FiSquare,
@@ -47,256 +52,297 @@ import {
   FiZap,
   FiTarget,
   FiTrello,
-  FiActivity
+  FiActivity,
+  FiCpu,
+  FiShare2,
+  FiTrendingUp
 } from 'react-icons/fi';
 import '@xyflow/react/dist/style.css';
 
 // ------------------------------------
-// ORGANIC LAYOUT FUNCTIONS (D3-Force Style)
+// ADVANCED ELK LAYOUT ENGINE
 // ------------------------------------
-const createOrganicLayout = (nodes, edges, width = 1200, height = 800) => {
-  // Create clusters based on node connections
-  const clusters = [];
-  const nodeCluster = new Map();
+const elk = new ELK();
 
-  // Group connected nodes into clusters
-  nodes.forEach((node, index) => {
-    if (!nodeCluster.has(node.id)) {
-      const cluster = [];
-      const visited = new Set();
+// Advanced ELK configuration presets for different diagram types
+const ELK_PRESETS = {
+  hierarchical: {
+    'elk.algorithm': 'layered',
+    'elk.direction': 'DOWN',
+    'elk.spacing.nodeNode': '60',
+    'elk.layered.spacing.nodeNodeBetweenLayers': '80',
+    'elk.layered.spacing.edgeNodeBetweenLayers': '40',
+    'elk.spacing.edgeNode': '30',
+    'elk.spacing.edgeEdge': '20',
+    'elk.layered.nodePlacement.strategy': 'INTERACTIVE',
+    'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+    'elk.layered.greedySwitch.type': 'TWO_SIDED',
+  },
+  organic: {
+    'elk.algorithm': 'stress',
+    'elk.stress.dimension': 'XY',
+    'elk.stress.epsilon': '0.0001',
+    'elk.spacing.nodeNode': '80',
+    'elk.stress.iterationLimit': '1000',
+    'elk.randomSeed': '42',
+  },
+  radial: {
+    'elk.algorithm': 'radial',
+    'elk.radial.radius': '200',
+    'elk.spacing.nodeNode': '50',
+    'elk.radial.compaction': 'true',
+    'elk.radial.sorter': 'RADIUS_ASCENDING',
+  },
+  force: {
+    'elk.algorithm': 'force',
+    'elk.force.iterations': '300',
+    'elk.force.repulsivePower': '2',
+    'elk.spacing.nodeNode': '100',
+    'elk.force.temperature': '0.001',
+  },
+  circular: {
+    'elk.algorithm': 'disco',
+    'elk.disco.componentCompaction.strategy': 'IMPROVE_STRAIGHTNESS',
+    'elk.spacing.nodeNode': '60',
+    'elk.disco.componentCompaction.componentComponentSpacing': '100',
+  }
+};
 
-      const addToCluster = (nodeId) => {
-        if (visited.has(nodeId)) return;
-        visited.add(nodeId);
-        cluster.push(nodeId);
+// Advanced layout function with ELK
+const createAdvancedLayout = async (nodes, edges, layoutType = 'hierarchical', options = {}) => {
+  if (!nodes.length) return { nodes, edges };
 
-        // Find connected nodes
-        edges.forEach(edge => {
-          if (edge.source === nodeId && !visited.has(edge.target)) {
-            addToCluster(edge.target);
-          }
-          if (edge.target === nodeId && !visited.has(edge.source)) {
-            addToCluster(edge.source);
-          }
-        });
-      };
+  const elkOptions = {
+    ...ELK_PRESETS[layoutType],
+    ...options
+  };
 
-      addToCluster(node.id);
-      clusters.push(cluster);
-      cluster.forEach(nodeId => nodeCluster.set(nodeId, clusters.length - 1));
-    }
-  });
+  const isHorizontal = elkOptions['elk.direction'] === 'RIGHT';
 
-  // Create organic positions with natural spacing
-  const organicNodes = nodes.map((node, index) => {
-    const clusterIndex = nodeCluster.get(node.id) || 0;
-    const clusterSize = clusters[clusterIndex]?.length || 1;
-    const nodeIndexInCluster = clusters[clusterIndex]?.indexOf(node.id) || 0;
+  const graph = {
+    id: 'root',
+    layoutOptions: elkOptions,
+    children: nodes.map((node) => ({
+      ...node,
+      targetPosition: isHorizontal ? 'left' : 'top',
+      sourcePosition: isHorizontal ? 'right' : 'bottom',
+      width: node.data?.width || getNodeWidth(node.data?.shape, node.data?.label),
+      height: node.data?.height || getNodeHeight(node.data?.shape),
+      // ELK ports for precise handle positioning
+      ports: getElkPorts(node.data?.shape, isHorizontal),
+    })),
+    edges: edges.map(edge => ({
+      ...edge,
+      sources: [edge.source],
+      targets: [edge.target],
+    })),
+  };
 
-    // Use golden ratio and natural spacing
-    const phi = (1 + Math.sqrt(5)) / 2; // Golden ratio
-    const angle = (nodeIndexInCluster / clusterSize) * 2 * Math.PI;
-    const radius = Math.max(150, clusterSize * 60);
-
-    // Add some randomness for organic feel
-    const randomOffset = {
-      x: (Math.random() - 0.5) * 100,
-      y: (Math.random() - 0.5) * 100
-    };
-
-    // Calculate cluster center with natural distribution
-    const clusterCenterX = (width / Math.max(clusters.length, 2)) * (clusterIndex + 1) + randomOffset.x;
-    const clusterCenterY = height / 3 + Math.sin(clusterIndex * phi) * 200 + randomOffset.y;
-
-    // Position nodes around cluster center in organic pattern
-    const x = clusterCenterX + Math.cos(angle + index * 0.1) * radius + Math.random() * 80 - 40;
-    const y = clusterCenterY + Math.sin(angle + index * 0.1) * radius + Math.random() * 80 - 40;
+  try {
+    const layoutedGraph = await elk.layout(graph);
 
     return {
-      ...node,
-      position: {
-        x: Math.max(50, Math.min(width - 200, x)),
-        y: Math.max(50, Math.min(height - 100, y))
-      }
+      nodes: layoutedGraph.children.map((node) => ({
+        ...node,
+        position: { x: node.x, y: node.y },
+        data: {
+          ...node.data,
+          width: node.width,
+          height: node.height,
+        }
+      })),
+      edges: layoutedGraph.edges || edges,
     };
-  });
+  } catch (error) {
+    console.error('ELK layout failed:', error);
+    return { nodes, edges };
+  }
+};
 
-  return organicNodes;
+// Generate ELK ports for precise handle positioning
+const getElkPorts = (shape, isHorizontal) => {
+  const ports = [];
+
+  if (shape === 'diamond') {
+    ports.push(
+      { id: 'port_top', properties: { 'port.side': 'NORTH', 'port.index': '0' } },
+      { id: 'port_right', properties: { 'port.side': 'EAST', 'port.index': '0' } },
+      { id: 'port_bottom', properties: { 'port.side': 'SOUTH', 'port.index': '0' } },
+      { id: 'port_left', properties: { 'port.side': 'WEST', 'port.index': '0' } }
+    );
+  } else {
+    // Rectangle and ellipse
+    if (isHorizontal) {
+      ports.push(
+        { id: 'port_left', properties: { 'port.side': 'WEST', 'port.index': '0' } },
+        { id: 'port_right', properties: { 'port.side': 'EAST', 'port.index': '0' } }
+      );
+    } else {
+      ports.push(
+        { id: 'port_top', properties: { 'port.side': 'NORTH', 'port.index': '0' } },
+        { id: 'port_bottom', properties: { 'port.side': 'SOUTH', 'port.index': '0' } }
+      );
+    }
+  }
+
+  return ports;
 };
 
 // ------------------------------------
-// API DATA PROCESSING WITH ORGANIC LAYOUT
+// PROFESSIONAL COLOR SYSTEM WITH CHROMA.JS
+// ------------------------------------
+const generateColorScheme = (baseColor) => {
+  const base = chroma(baseColor);
+  return {
+    light: base.alpha(0.1).css(),
+    main: base.css(),
+    dark: base.darken(1.5).css(),
+    stroke: base.darken(0.5).css(),
+    shadow: base.alpha(0.2).css(),
+    gradient: `linear-gradient(135deg, ${base.brighten(0.5).css()}, ${base.css()})`,
+  };
+};
+
+const ADVANCED_COLORS = {
+  // Semantic colors
+  process: generateColorScheme('#3B82F6'), // Blue
+  decision: generateColorScheme('#F59E0B'), // Amber  
+  terminal: generateColorScheme('#10B981'), // Emerald
+  data: generateColorScheme('#8B5CF6'), // Violet
+  connector: generateColorScheme('#EC4899'), // Pink
+
+  // Professional palette
+  corporate: generateColorScheme('#1E40AF'), // Corporate Blue
+  success: generateColorScheme('#059669'), // Success Green
+  warning: generateColorScheme('#D97706'), // Warning Orange
+  error: generateColorScheme('#DC2626'), // Error Red
+  neutral: generateColorScheme('#6B7280'), // Neutral Gray
+};
+
+// Shape-specific color mapping
+const SHAPE_COLOR_MAP = {
+  rectangle: ADVANCED_COLORS.process,
+  ellipse: ADVANCED_COLORS.terminal,
+  diamond: ADVANCED_COLORS.decision,
+  parallelogram: ADVANCED_COLORS.data,
+  hexagon: ADVANCED_COLORS.connector,
+};
+
+// ------------------------------------
+// UTILITY FUNCTIONS
+// ------------------------------------
+const getNodeWidth = (shape, label = '') => {
+  const baseWidth = 160;
+  const labelWidth = Math.max(baseWidth, (label?.length || 0) * 8 + 60);
+
+  switch (shape) {
+    case 'diamond':
+      return Math.max(120, Math.min(labelWidth * 0.8, 180));
+    case 'ellipse':
+      return Math.max(140, Math.min(labelWidth, 220));
+    case 'hexagon':
+      return Math.max(130, Math.min(labelWidth, 200));
+    default:
+      return Math.max(baseWidth, Math.min(labelWidth, 280));
+  }
+};
+
+const getNodeHeight = (shape) => {
+  switch (shape) {
+    case 'diamond':
+      return 100;
+    case 'ellipse':
+      return 70;
+    case 'hexagon':
+      return 80;
+    default:
+      return 60;
+  }
+};
+
+// ------------------------------------
+// API DATA PROCESSING
 // ------------------------------------
 const processApiData = (apiResponse) => {
-  console.log('🔄 Processing API data:', apiResponse);
-
   if (!apiResponse || !apiResponse.success || !apiResponse.data) {
-    console.error('❌ Invalid API response structure');
     return { nodes: [], edges: [], metadata: {} };
   }
 
   const { data, metadata } = apiResponse;
-  console.log('📊 Raw data:', { nodes: data.nodes?.length, edges: data.edges?.length });
 
-  // Process nodes from API with enhanced styling
-  const processedNodes = (data.nodes || []).map((node, index) => {
-    console.log('🔗 Processing node:', node.id, node);
+  const processedNodes = (data.nodes || []).map((node) => {
+    const shape = node.type === 'diamond' ? 'diamond' : 'rectangle';
+    const colorScheme = SHAPE_COLOR_MAP[shape] || ADVANCED_COLORS.process;
 
     return {
       id: node.id,
-      type: node.type || 'flowchart',
-      position: node.position || { x: 0, y: 0 }, // Will be repositioned organically
+      type: 'advanced-node',
+      position: node.position || { x: 0, y: 0 },
       data: {
         label: node.data?.label || `Node ${node.id}`,
-        shape: node.type === 'diamond' ? 'diamond' : 'rectangle',
+        shape: shape,
+        width: getNodeWidth(shape, node.data?.label),
+        height: getNodeHeight(shape),
+        colorScheme: colorScheme,
         ...node.data,
-        style: {
-          backgroundColor: node.style?.backgroundColor || '#6B7280',
-          color: node.style?.color || 'white',
-          borderColor: node.style?.borderColor,
-          borderRadius: node.style?.borderRadius,
-          fontSize: node.style?.fontSize,
-          fontWeight: node.style?.fontWeight,
-          padding: node.style?.padding,
-          ...node.style
-        }
       },
-      style: node.style || {},
-      sourcePosition: Position.Bottom,
-      targetPosition: Position.Top,
     };
   });
 
-  // Process edges with beautiful curved paths
-  const processedEdges = (data.edges || []).map(edge => {
-    console.log('🔀 Processing edge:', edge.id, edge);
-
-    return {
-      id: edge.id,
-      source: edge.source,
-      target: edge.target,
-      type: edge.type || 'organic', // Use custom organic edge type
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        width: 12,
-        height: 12,
-        color: edge.style?.stroke || '#4A90E2',
-      },
-      style: {
-        strokeWidth: 2.5,
-        stroke: edge.style?.stroke || '#4A90E2',
-        strokeDasharray: edge.style?.strokeDasharray,
-        ...edge.style
-      },
-      data: {
-        label: edge.data?.label,
-        ...edge.data
-      }
-    };
-  });
-
-  const processedMetadata = {
-    diagramType: data.metadata?.diagramType || metadata?.diagramType || 'flowchart',
-    nodeCount: metadata?.nodeCount || processedNodes.length,
-    edgeCount: metadata?.edgeCount || processedEdges.length,
-    complexity: metadata?.complexity,
-    generatedAt: metadata?.generatedAt,
-    style: metadata?.style,
-    ...metadata
-  };
-
-  console.log('✅ Processed data:', {
-    nodes: processedNodes.length,
-    edges: processedEdges.length,
-    metadata: processedMetadata
-  });
+  const processedEdges = (data.edges || []).map(edge => ({
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    type: 'advanced-edge',
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      width: 15,
+      height: 15,
+      color: '#374151',
+    },
+    style: {
+      strokeWidth: 2,
+      stroke: '#374151',
+    },
+    data: {
+      label: edge.data?.label,
+      ...edge.data
+    }
+  }));
 
   return {
     nodes: processedNodes,
     edges: processedEdges,
-    metadata: processedMetadata
+    metadata: {
+      diagramType: metadata?.diagramType || 'flowchart',
+      ...metadata
+    }
   };
 };
 
 // ------------------------------------
-// PROFESSIONAL COLOR SCHEMES
+// ADVANCED TEXT EDITOR
 // ------------------------------------
-const DIAGRAM_TYPES = {
-  FLOWCHART: 'flowchart',
-  ER_DIAGRAM: 'er_diagram',
-  UML_CLASS: 'uml_class',
-  UML_SEQUENCE: 'uml_sequence',
-  NETWORK: 'network',
-  ORG_CHART: 'org_chart',
-  MIND_MAP: 'mind_map',
-  GANTT: 'gantt',
-  SWIMLANE: 'swimlane'
-};
-
-// Professional color palettes inspired by modern design systems
-const COLOR_SCHEMES = {
-  [DIAGRAM_TYPES.FLOWCHART]: {
-    primary: '#4A90E2',    // Professional blue
-    secondary: '#7B68EE',  // Medium slate blue
-    success: '#50C878',    // Emerald green
-    warning: '#FF8C42',    // Vibrant orange
-    error: '#E74C3C',      // Soft red
-    info: '#17A2B8',       // Teal
-    accent: '#9B59B6',     // Purple
-    neutral: '#6C7B7F'     // Cool gray
-  },
-  [DIAGRAM_TYPES.ER_DIAGRAM]: {
-    entity: '#8E44AD',     // Deep purple
-    attribute: '#F39C12',  // Orange
-    relationship: '#16A085', // Teal
-    key: '#C0392B',       // Dark red
-    foreign: '#2980B9'    // Blue
-  },
-  [DIAGRAM_TYPES.UML_CLASS]: {
-    class: '#3498DB',      // Bright blue
-    abstract: '#9B59B6',  // Purple
-    interface: '#27AE60', // Green
-    enum: '#E67E22',      // Orange
-    package: '#95A5A6'    // Gray
-  },
-  [DIAGRAM_TYPES.NETWORK]: {
-    server: '#E74C3C',     // Red
-    client: '#3498DB',     // Blue
-    database: '#27AE60',  // Green
-    cloud: '#9B59B6',     // Purple
-    security: '#F39C12'   // Orange
-  },
-  [DIAGRAM_TYPES.ORG_CHART]: {
-    executive: '#8E44AD',  // Purple
-    manager: '#3498DB',    // Blue
-    employee: '#27AE60',  // Green
-    contractor: '#E67E22', // Orange
-    department: '#34495E' // Dark gray
-  }
-};
-
-// ------------------------------------
-// TEXT EDITOR COMPONENT
-// ------------------------------------
-const TextEditor = ({
+const AdvancedTextEditor = ({
   value,
   onChange,
   onSubmit,
   onCancel,
   style = {},
-  autoFocus = true
+  autoFocus = true,
+  multiline = false
 }) => {
   const [textValue, setTextValue] = useState(value || '');
-  const textareaRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     setTextValue(value || '');
   }, [value]);
 
   useEffect(() => {
-    if (autoFocus && textareaRef.current) {
-      textareaRef.current.focus();
-      textareaRef.current.select();
+    if (autoFocus && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
     }
   }, [autoFocus]);
 
@@ -304,15 +350,20 @@ const TextEditor = ({
     e.stopPropagation();
     if (e.key === 'Escape') {
       onCancel?.();
-    } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    } else if (e.key === 'Enter' && !e.shiftKey && !multiline) {
+      e.preventDefault();
+      onSubmit?.(textValue);
+    } else if (e.key === 'Enter' && e.ctrlKey && multiline) {
       e.preventDefault();
       onSubmit?.(textValue);
     }
-  }, [textValue, onSubmit, onCancel]);
+  }, [textValue, onSubmit, onCancel, multiline]);
+
+  const InputComponent = multiline ? 'textarea' : 'input';
 
   return (
-    <textarea
-      ref={textareaRef}
+    <InputComponent
+      ref={inputRef}
       value={textValue}
       onChange={(e) => {
         setTextValue(e.target.value);
@@ -323,22 +374,263 @@ const TextEditor = ({
       placeholder="Enter text..."
       style={{
         background: 'white',
-        border: '2px solid #4A90E2',
+        border: '2px solid #3B82F6',
         borderRadius: '8px',
-        padding: '10px',
+        padding: '12px',
         fontSize: '14px',
         fontWeight: '500',
-        color: '#2C3E50',
+        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        color: '#1F2937',
         resize: 'none',
         outline: 'none',
-        minWidth: '120px',
-        minHeight: '36px',
+        minWidth: '140px',
+        minHeight: multiline ? '60px' : '40px',
         textAlign: 'center',
-        boxShadow: '0 2px 8px rgba(74, 144, 226, 0.15)',
+        boxShadow: '0 4px 12px rgba(59, 130, 246, 0.15)',
         ...style
       }}
-      rows={1}
+      rows={multiline ? 3 : 1}
     />
+  );
+};
+
+// ------------------------------------
+// ADVANCED NODE COMPONENT
+// ------------------------------------
+const AdvancedNode = ({ id, data, selected }) => {
+  const [isEditing, setIsEditing] = useState(data.isNew || false);
+  const [textValue, setTextValue] = useState(data.label || '');
+  const { updateNode, deleteNode } = React.useContext(NodeUpdateContext);
+
+  const handleSubmit = useCallback((value) => {
+    if (!value.trim() && data.isNew) {
+      deleteNode(id);
+      return;
+    }
+    const newWidth = getNodeWidth(data.shape, value);
+    updateNode(id, {
+      ...data,
+      label: value,
+      isNew: false,
+      width: newWidth
+    });
+    setIsEditing(false);
+  }, [id, data, updateNode, deleteNode]);
+
+  const handleCancel = useCallback(() => {
+    if (data.isNew) {
+      deleteNode(id);
+    } else {
+      setTextValue(data.label || '');
+      setIsEditing(false);
+    }
+  }, [data.isNew, data.label, id, deleteNode]);
+
+  const getShapeComponent = () => {
+    const { shape, colorScheme, width = 160, height = 60 } = data;
+
+    const baseStyle = {
+      width: `${width}px`,
+      height: `${height}px`,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      textAlign: 'center',
+      cursor: 'default',
+      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      fontSize: '14px',
+      fontWeight: '600',
+      color: '#1F2937',
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      transform: selected ? 'scale(1.02)' : 'scale(1)',
+      filter: selected ?
+        'drop-shadow(0 10px 30px rgba(59, 130, 246, 0.3)) brightness(1.05)' :
+        'drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1))',
+    };
+
+    const shapeStyles = {
+      rectangle: {
+        background: colorScheme.gradient,
+        border: `3px solid ${colorScheme.stroke}`,
+        borderRadius: '12px',
+      },
+      ellipse: {
+        background: colorScheme.gradient,
+        border: `3px solid ${colorScheme.stroke}`,
+        borderRadius: '50%',
+      },
+      diamond: {
+        background: colorScheme.gradient,
+        border: `3px solid ${colorScheme.stroke}`,
+        borderRadius: '12px',
+        transform: `rotate(45deg) ${selected ? 'scale(1.02)' : 'scale(1)'}`,
+        width: `${Math.min(width, height)}px`,
+        height: `${Math.min(width, height)}px`,
+      },
+      hexagon: {
+        background: colorScheme.gradient,
+        border: `3px solid ${colorScheme.stroke}`,
+        borderRadius: '8px',
+        clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)',
+      },
+      parallelogram: {
+        background: colorScheme.gradient,
+        border: `3px solid ${colorScheme.stroke}`,
+        borderRadius: '8px',
+        transform: 'skewX(-15deg)',
+      }
+    };
+
+    const isDiamond = shape === 'diamond';
+    const isParallelogram = shape === 'parallelogram';
+
+    return (
+      <div
+        style={{
+          ...baseStyle,
+          ...shapeStyles[shape] || shapeStyles.rectangle,
+        }}
+        onDoubleClick={() => !isDiamond && setIsEditing(true)}
+      >
+        <div style={{
+          transform: isDiamond ? 'rotate(-45deg)' : isParallelogram ? 'skewX(15deg)' : 'none',
+          padding: isDiamond ? '8px' : '12px',
+          maxWidth: '100%',
+          overflow: 'hidden'
+        }}>
+          {isEditing ? (
+            <AdvancedTextEditor
+              value={textValue}
+              onChange={setTextValue}
+              onSubmit={handleSubmit}
+              onCancel={handleCancel}
+              style={{
+                maxWidth: `${width - 40}px`,
+                fontSize: isDiamond ? '12px' : '14px',
+              }}
+              multiline={!isDiamond}
+            />
+          ) : (
+            <span style={{
+              fontSize: isDiamond ? '12px' : '14px',
+              lineHeight: '1.3',
+              wordBreak: 'break-word',
+              display: 'block',
+            }}>
+              {data.label || 'Click to edit'}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const getHandlePositions = () => {
+    const handleStyle = {
+      width: '12px',
+      height: '12px',
+      background: 'linear-gradient(135deg, #fff, #f9fafb)',
+      border: '2px solid #3B82F6',
+      borderRadius: '50%',
+      opacity: selected ? 1 : 0,
+      transition: 'opacity 0.2s ease',
+      boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)',
+    };
+
+    return [
+      { type: 'target', position: Position.Top, id: 'port_top', style: handleStyle },
+      { type: 'source', position: Position.Bottom, id: 'port_bottom', style: handleStyle },
+      { type: 'target', position: Position.Left, id: 'port_left', style: handleStyle },
+      { type: 'source', position: Position.Right, id: 'port_right', style: handleStyle },
+    ];
+  };
+
+  return (
+    <div className="advanced-node" style={{ position: 'relative' }}>
+      {getHandlePositions().map((handle) => (
+        <Handle
+          key={handle.id}
+          type={handle.type}
+          position={handle.position}
+          id={handle.id}
+          style={handle.style}
+        />
+      ))}
+      {getShapeComponent()}
+    </div>
+  );
+};
+
+// ------------------------------------
+// ADVANCED EDGE COMPONENT
+// ------------------------------------
+const AdvancedEdge = ({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  selected,
+  markerEnd,
+  data,
+  style: edgeStyle = {}
+}) => {
+  const { setEdges } = useReactFlow();
+  const [isHovered, setIsHovered] = useState(false);
+
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+    curvature: 0.2,
+  });
+
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        markerEnd={markerEnd}
+        style={{
+          strokeWidth: selected ? 3 : 2,
+          stroke: selected || isHovered ? '#3B82F6' : '#6B7280',
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          filter: 'drop-shadow(0 1px 3px rgba(0, 0, 0, 0.1))',
+          ...edgeStyle,
+        }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        interactionWidth={20}
+      />
+
+      {data?.label && (
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              pointerEvents: 'all',
+            }}
+            className="nodrag nopan"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white px-3 py-1.5 rounded-full border-2 border-blue-200 shadow-lg text-xs font-semibold text-gray-700"
+              style={{ backdropFilter: 'blur(8px)' }}
+            >
+              {data.label}
+            </motion.div>
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
   );
 };
 
@@ -351,369 +643,9 @@ const NodeUpdateContext = React.createContext({
 });
 
 // ------------------------------------
-// ENHANCED ORGANIC FLOWCHART NODE
+// ADVANCED TOOLBAR
 // ------------------------------------
-const FlowchartNode = ({ id, data, selected, type: nodeType = 'rectangle' }) => {
-  const [isEditing, setIsEditing] = useState(data.isNew || false);
-  const [textValue, setTextValue] = useState(data.label || '');
-  const { updateNode, deleteNode } = React.useContext(NodeUpdateContext);
-
-  const handleSubmit = useCallback((value) => {
-    if (!value.trim() && data.isNew) {
-      deleteNode(id);
-      return;
-    }
-    updateNode(id, { ...data, label: value, isNew: false });
-    setIsEditing(false);
-  }, [id, data, updateNode, deleteNode]);
-
-  const handleCancel = useCallback(() => {
-    if (data.isNew) {
-      deleteNode(id);
-    } else {
-      setTextValue(data.label || '');
-      setIsEditing(false);
-    }
-  }, [data.isNew, data.label, id, deleteNode]);
-
-  const getShapeStyle = () => {
-    const shape = data.shape || nodeType;
-    const apiStyle = data.style || {};
-    const apiBackground = apiStyle.backgroundColor || '#4A90E2';
-    const apiColor = apiStyle.color || 'white';
-
-    const baseStyle = {
-      background: `linear-gradient(135deg, ${apiBackground}, ${apiBackground}dd)`,
-      border: `2px solid ${apiStyle.borderColor || apiBackground}`,
-      borderRadius: apiStyle.borderRadius || '12px',
-      color: apiColor,
-      fontSize: apiStyle.fontSize || '14px',
-      fontWeight: apiStyle.fontWeight || '600',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      textAlign: 'center',
-      cursor: 'default',
-      position: 'relative',
-      width: data.width || '160px',
-      height: data.height || '70px',
-      padding: apiStyle.padding || '14px',
-      boxShadow: selected
-        ? `0 0 0 3px ${apiBackground}40, 0 8px 25px ${apiBackground}30`
-        : `0 4px 15px ${apiBackground}20, 0 2px 8px rgba(0,0,0,0.05)`,
-      transform: selected ? 'scale(1.03) translateY(-2px)' : 'scale(1)',
-      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-    };
-
-    // Enhanced shapes with organic feel
-    switch (shape) {
-      case 'ellipse':
-      case 'circle':
-        return {
-          ...baseStyle,
-          borderRadius: '50%',
-          width: '90px',
-          height: '90px',
-          background: `radial-gradient(circle at 30% 30%, ${apiBackground}, ${apiBackground}cc)`
-        };
-      case 'diamond':
-        return {
-          ...baseStyle,
-          borderRadius: '8px',
-          transform: `rotate(45deg) ${selected ? 'scale(1.03)' : 'scale(1)'}`,
-          width: '75px',
-          height: '75px',
-          background: `linear-gradient(45deg, ${apiBackground}, ${apiBackground}dd)`
-        };
-      default:
-        return baseStyle;
-    }
-  };
-
-  const getHandlePositions = () => {
-    const handleStyle = {
-      width: '12px',
-      height: '12px',
-      background: 'linear-gradient(135deg, #fff, #f8f9fa)',
-      border: '2px solid #4A90E2',
-      borderRadius: '50%',
-      zIndex: 10,
-      boxShadow: '0 2px 6px rgba(74, 144, 226, 0.3)',
-    };
-
-    return [
-      { type: 'target', position: Position.Top, style: { ...handleStyle, top: -6 } },
-      { type: 'source', position: Position.Bottom, style: { ...handleStyle, bottom: -6 } },
-      { type: 'target', position: Position.Left, style: { ...handleStyle, left: -6 } },
-      { type: 'source', position: Position.Right, style: { ...handleStyle, right: -6 } }
-    ];
-  };
-
-  const shapeStyle = getShapeStyle();
-  const isDiamond = (data.shape || nodeType) === 'diamond';
-
-  return (
-    <div
-      style={shapeStyle}
-      onDoubleClick={() => setIsEditing(true)}
-      className="diagram-node organic-node"
-    >
-      {selected && !isDiamond && (
-        <NodeResizer
-          color="#4A90E2"
-          isVisible={selected}
-          minWidth={120}
-          minHeight={60}
-        />
-      )}
-
-      {getHandlePositions().map((handle, index) => (
-        <Handle
-          key={`${handle.type}-${handle.position}-${index}`}
-          type={handle.type}
-          position={handle.position}
-          style={handle.style}
-        />
-      ))}
-
-      {isEditing ? (
-        <div style={isDiamond ? { transform: 'rotate(-45deg)' } : {}}>
-          <TextEditor
-            value={textValue}
-            onChange={setTextValue}
-            onSubmit={handleSubmit}
-            onCancel={handleCancel}
-            style={{
-              minWidth: isDiamond ? '70px' : '130px',
-              maxWidth: isDiamond ? '90px' : '150px',
-            }}
-          />
-        </div>
-      ) : (
-        <div style={isDiamond ? { transform: 'rotate(-45deg)' } : {}}>
-          <span style={{
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            fontSize: '13px',
-            lineHeight: '1.3',
-            textAlign: 'center',
-            textShadow: '0 1px 2px rgba(0,0,0,0.1)'
-          }}>
-            {data.label || 'Double-click to edit'}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Diamond-specific node for API compatibility
-const DiamondNode = ({ id, data, selected }) => {
-  return (
-    <FlowchartNode
-      id={id}
-      data={{ ...data, shape: 'diamond' }}
-      selected={selected}
-      type="diamond"
-    />
-  );
-};
-
-// Free Text Node
-const FreeTextNode = ({ id, data, selected }) => {
-  const [isEditing, setIsEditing] = useState(data.isNew || false);
-  const [textValue, setTextValue] = useState(data.label || '');
-  const { updateNode, deleteNode } = React.useContext(NodeUpdateContext);
-
-  const handleSubmit = useCallback((value) => {
-    if (!value.trim()) {
-      deleteNode(id);
-      return;
-    }
-    updateNode(id, { ...data, label: value, isNew: false });
-    setIsEditing(false);
-  }, [id, data, updateNode, deleteNode]);
-
-  const handleCancel = useCallback(() => {
-    if (data.isNew) {
-      deleteNode(id);
-    } else {
-      setTextValue(data.label || '');
-      setIsEditing(false);
-    }
-  }, [data.isNew, data.label, id, deleteNode]);
-
-  return (
-    <div
-      onDoubleClick={() => setIsEditing(true)}
-      style={{
-        background: 'transparent',
-        border: 'none',
-        padding: '6px',
-        minWidth: '24px',
-        cursor: isEditing ? 'text' : 'default',
-        fontSize: '14px',
-        fontWeight: '500',
-        color: '#2C3E50',
-      }}
-    >
-      {isEditing ? (
-        <TextEditor
-          value={textValue}
-          onChange={setTextValue}
-          onSubmit={handleSubmit}
-          onCancel={handleCancel}
-          style={{ border: 'none', background: 'rgba(255, 255, 255, 0.95)' }}
-        />
-      ) : (
-        <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', minWidth: '24px', minHeight: '24px' }}>
-          {data.label || 'Double-click to edit'}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ------------------------------------
-// ORGANIC CURVED EDGE
-// ------------------------------------
-const OrganicEdge = ({
-  id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  selected,
-  markerEnd,
-  label,
-  data,
-  style: edgeStyle = {}
-}) => {
-  const { setEdges } = useReactFlow();
-  const [isHovered, setIsHovered] = useState(false);
-
-  // Create more organic, hand-drawn style curves
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-    curvature: data?.curvature || 0.25, // More curved for organic feel
-  });
-
-  const onDeleteClick = (evt) => {
-    evt.stopPropagation();
-    setEdges((edges) => edges.filter((edge) => edge.id !== id));
-  };
-
-  return (
-    <>
-      <BaseEdge
-        id={id}
-        path={edgePath}
-        markerEnd={markerEnd}
-        style={{
-          strokeWidth: selected ? 3.5 : 2.5,
-          stroke: isHovered || selected ? '#4A90E2' : edgeStyle.stroke || '#4A90E2',
-          strokeDasharray: data?.dashed ? '8,4' : undefined,
-          filter: 'drop-shadow(0 1px 3px rgba(74, 144, 226, 0.2))',
-          ...edgeStyle,
-        }}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        interactionWidth={25}
-      />
-
-      {(label || data?.label) && (
-        <EdgeLabelRenderer>
-          <div
-            style={{
-              position: 'absolute',
-              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-              pointerEvents: 'all',
-            }}
-            className="nodrag nopan"
-          >
-            <div
-              className="bg-white px-3 py-1 rounded-lg border shadow-lg text-xs font-semibold"
-              style={{
-                color: '#2C3E50',
-                borderColor: '#E1E5E9',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-              }}
-            >
-              {label || data?.label}
-            </div>
-          </div>
-        </EdgeLabelRenderer>
-      )}
-
-      <EdgeLabelRenderer>
-        <div
-          style={{
-            position: 'absolute',
-            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY - 25}px)`,
-            pointerEvents: 'all',
-          }}
-          className="nodrag nopan"
-        >
-          <AnimatePresence>
-            {(isHovered || selected) && (
-              <motion.button
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                onClick={onDeleteClick}
-                className="w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-all duration-200"
-              >
-                <HiX className="w-3 h-3" />
-              </motion.button>
-            )}
-          </AnimatePresence>
-        </div>
-      </EdgeLabelRenderer>
-    </>
-  );
-};
-
-// ------------------------------------
-// UTILITIES
-// ------------------------------------
-let nodeId = 1000;
-const getId = () => `node_${nodeId++}`;
-
-const createNewNode = (shape, position, color, diagramType = DIAGRAM_TYPES.FLOWCHART) => {
-  const baseNode = {
-    id: getId(),
-    position,
-    targetPosition: Position.Top,
-    sourcePosition: Position.Bottom,
-  };
-
-  return {
-    ...baseNode,
-    type: shape === 'text' ? 'freetext' : 'flowchart',
-    data: {
-      label: shape === 'text' ? '' : `New ${shape}`,
-      shape: shape,
-      color: color,
-      isNew: shape === 'text',
-      style: {
-        backgroundColor: color,
-        color: 'white'
-      }
-    },
-  };
-};
-
-// ------------------------------------
-// ENHANCED TOOLBAR COMPONENT
-// ------------------------------------
-const DiagramToolbar = ({
+const AdvancedToolbar = ({
   onAddShape,
   onDeleteSelected,
   selectedNodes,
@@ -722,66 +654,117 @@ const DiagramToolbar = ({
   onExport,
   onLayout,
   isExporting,
-  diagramType,
-  onDiagramTypeChange
+  currentLayout,
 }) => {
   const [showShapePanel, setShowShapePanel] = useState(false);
-  const [selectedColor, setSelectedColor] = useState(COLOR_SCHEMES.flowchart.primary);
+  const [showLayoutPanel, setShowLayoutPanel] = useState(false);
 
   const shapes = [
-    { key: 'rectangle', icon: FiSquare, label: 'Process' },
-    { key: 'ellipse', icon: FiCircle, label: 'Terminal' },
-    { key: 'diamond', icon: FiHexagon, label: 'Decision' },
-    { key: 'text', icon: FiType, label: 'Text' },
+    { key: 'rectangle', icon: FiSquare, label: 'Process', color: 'process' },
+    { key: 'ellipse', icon: FiCircle, label: 'Start/End', color: 'terminal' },
+    { key: 'diamond', icon: FiHexagon, label: 'Decision', color: 'decision' },
+    { key: 'hexagon', icon: FiCpu, label: 'Connector', color: 'connector' },
+    { key: 'parallelogram', icon: FiDatabase, label: 'Data', color: 'data' },
   ];
 
-  const colors = Object.values(COLOR_SCHEMES[diagramType] || COLOR_SCHEMES.flowchart);
+  const layouts = [
+    { key: 'hierarchical', label: 'Hierarchical', icon: FiLayers, description: 'Top-down flow' },
+    { key: 'organic', label: 'Organic', icon: FiShare2, description: 'Natural positioning' },
+    { key: 'radial', label: 'Radial', icon: FiTarget, description: 'Circular arrangement' },
+    { key: 'force', label: 'Force-Directed', icon: FiZap, description: 'Physics-based' },
+    { key: 'circular', label: 'Circular', icon: FiCircle, description: 'Perfect circle' },
+  ];
 
   const handleAddShape = (shapeKey) => {
     const position = { x: Math.random() * 300 + 100, y: Math.random() * 300 + 100 };
-    onAddShape(createNewNode(shapeKey, position, selectedColor, diagramType));
+    const colorScheme = SHAPE_COLOR_MAP[shapeKey] || ADVANCED_COLORS.process;
+
+    const newNode = {
+      id: `node_${Date.now()}`,
+      type: 'advanced-node',
+      position,
+      data: {
+        label: `New ${shapeKey}`,
+        shape: shapeKey,
+        colorScheme: colorScheme,
+        width: getNodeWidth(shapeKey, `New ${shapeKey}`),
+        height: getNodeHeight(shapeKey),
+        isNew: true,
+      },
+    };
+
+    onAddShape(newNode);
     setShowShapePanel(false);
   };
-
-  const diagramTypes = [
-    { key: DIAGRAM_TYPES.FLOWCHART, label: 'Flowchart', icon: FiActivity },
-    { key: DIAGRAM_TYPES.ER_DIAGRAM, label: 'ER Diagram', icon: FiDatabase },
-    { key: DIAGRAM_TYPES.UML_CLASS, label: 'UML Class', icon: FiBox },
-    { key: DIAGRAM_TYPES.NETWORK, label: 'Network', icon: FiGrid },
-  ];
 
   return (
     <motion.div
       className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50"
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
     >
-      <div className="flex items-center space-x-3 bg-white/95 backdrop-blur border rounded-2xl px-4 py-3 shadow-xl border-gray-200/50">
+      <div className="flex items-center space-x-4 bg-white/95 backdrop-blur-md border border-gray-200/50 rounded-2xl px-6 py-4 shadow-2xl">
 
-        {/* Diagram Type Selector */}
+        {/* Layout Selector */}
         <div className="relative">
-          <select
-            value={diagramType}
-            onChange={(e) => onDiagramTypeChange(e.target.value)}
-            className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          <motion.button
+            onClick={() => setShowLayoutPanel(!showLayoutPanel)}
+            className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-xl hover:from-purple-600 hover:to-indigo-700 transition-all duration-200 text-sm font-semibold shadow-lg"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
           >
-            {diagramTypes.map(({ key, label }) => (
-              <option key={key} value={key}>{label}</option>
-            ))}
-          </select>
-        </div>
+            <HiViewGrid className="w-4 h-4" />
+            <span>Layout</span>
+          </motion.button>
 
-        <div className="w-px h-6 bg-gray-300"></div>
+          <AnimatePresence>
+            {showLayoutPanel && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                className="absolute top-full mt-2 left-0 bg-white/95 backdrop-blur-md border border-gray-200/50 rounded-xl shadow-2xl p-4 min-w-[280px] z-50"
+              >
+                <div className="space-y-2">
+                  {layouts.map(({ key, label, icon: Icon, description }) => (
+                    <motion.button
+                      key={key}
+                      onClick={() => {
+                        onLayout(key);
+                        setShowLayoutPanel(false);
+                      }}
+                      className={`w-full flex items-center space-x-3 p-3 text-left rounded-lg transition-all duration-200 ${currentLayout === key
+                          ? 'bg-blue-100 border-2 border-blue-300 text-blue-800'
+                          : 'hover:bg-gray-50 text-gray-700'
+                        }`}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <Icon className="w-5 h-5" />
+                      <div>
+                        <div className="font-semibold">{label}</div>
+                        <div className="text-xs opacity-70">{description}</div>
+                      </div>
+                    </motion.button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
         {/* Add Shape */}
         <div className="relative">
-          <button
+          <motion.button
             onClick={() => setShowShapePanel(!showShapePanel)}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+            className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-xl hover:from-blue-600 hover:to-cyan-700 transition-all duration-200 text-sm font-semibold shadow-lg"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
           >
             <HiPlus className="w-4 h-4" />
             <span>Add Shape</span>
-          </button>
+          </motion.button>
 
           <AnimatePresence>
             {showShapePanel && (
@@ -789,91 +772,79 @@ const DiagramToolbar = ({
                 initial={{ opacity: 0, scale: 0.95, y: -10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                className="absolute top-full mt-2 left-0 bg-white/95 backdrop-blur border rounded-xl shadow-xl p-4 min-w-[200px] z-50 border-gray-200/50"
+                className="absolute top-full mt-2 left-0 bg-white/95 backdrop-blur-md border border-gray-200/50 rounded-xl shadow-2xl p-4 min-w-[240px] z-50"
               >
-                <div className="mb-4">
-                  <div className="text-xs font-medium text-gray-600 mb-2">Color</div>
-                  <div className="flex space-x-2 flex-wrap">
-                    {colors.map((color, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setSelectedColor(color)}
-                        className={`w-6 h-6 rounded-full border-2 transition-all ${selectedColor === color
-                          ? 'border-gray-800 ring-2 ring-gray-300 transform scale-110'
-                          : 'border-gray-300 hover:scale-105'
-                          }`}
-                        style={{ background: color }}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-xs font-medium text-gray-600 mb-2">Shapes</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {shapes.map(({ key, icon: Icon, label }) => (
-                      <button
+                <div className="space-y-2">
+                  {shapes.map(({ key, icon: Icon, label, color }) => {
+                    const colorScheme = ADVANCED_COLORS[color];
+                    return (
+                      <motion.button
                         key={key}
                         onClick={() => handleAddShape(key)}
-                        className="flex items-center space-x-2 p-2 text-left text-sm text-gray-700 hover:bg-blue-50 rounded-lg transition-colors"
+                        className="w-full flex items-center space-x-3 p-3 text-left text-gray-700 hover:bg-gray-50 rounded-lg transition-all duration-200"
+                        whileHover={{ scale: 1.02, x: 4 }}
+                        whileTap={{ scale: 0.98 }}
                       >
-                        <Icon className="w-4 h-4" />
-                        <span>{label}</span>
-                      </button>
-                    ))}
-                  </div>
+                        <div
+                          className="w-10 h-10 rounded-lg flex items-center justify-center"
+                          style={{
+                            background: colorScheme.gradient,
+                            border: `2px solid ${colorScheme.stroke}`
+                          }}
+                        >
+                          <Icon className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <div className="font-semibold">{label}</div>
+                          <div className="text-xs text-gray-500 capitalize">{key} shape</div>
+                        </div>
+                      </motion.button>
+                    );
+                  })}
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
-        <div className="w-px h-6 bg-gray-300"></div>
-
-        {/* Organic Layout Button */}
-        <button
-          onClick={() => onLayout('organic')}
-          className="flex items-center space-x-2 px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
-          title="Organic hand-drawn style layout"
-        >
-          <FiGrid className="w-4 h-4" />
-          <span>Organic Layout</span>
-        </button>
-
-        <div className="w-px h-6 bg-gray-300"></div>
-
         {/* Delete Selected */}
         {(selectedNodes.length > 0 || selectedEdges.length > 0) && (
-          <>
-            <button
-              onClick={onDeleteSelected}
-              className="flex items-center space-x-1 px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
-            >
-              <HiTrash className="w-4 h-4" />
-              <span>Delete ({selectedNodes.length + selectedEdges.length})</span>
-            </button>
-            <div className="w-px h-6 bg-gray-300"></div>
-          </>
+          <motion.button
+            onClick={onDeleteSelected}
+            className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl hover:from-red-600 hover:to-rose-700 transition-all duration-200 text-sm font-semibold shadow-lg"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+          >
+            <HiTrash className="w-4 h-4" />
+            <span>Delete ({selectedNodes.length + selectedEdges.length})</span>
+          </motion.button>
         )}
 
+        <div className="w-px h-8 bg-gray-300"></div>
+
         {/* Fit View */}
-        <button
+        <motion.button
           onClick={onFitView}
-          className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-          title="Fit to view"
+          className="p-2.5 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-xl transition-colors"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
         >
-          <FiEye className="w-4 h-4" />
-        </button>
+          <FiEye className="w-5 h-5" />
+        </motion.button>
 
         {/* Export */}
-        <button
+        <motion.button
           onClick={onExport}
           disabled={isExporting}
-          className="flex items-center space-x-1 px-3 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 disabled:opacity-50 transition-colors text-sm font-medium shadow-md hover:shadow-lg transform hover:-translate-y-0.5 disabled:transform-none"
+          className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 transition-all duration-200 text-sm font-semibold shadow-lg"
+          whileHover={{ scale: isExporting ? 1 : 1.02 }}
+          whileTap={{ scale: isExporting ? 1 : 0.98 }}
         >
           <FiDownloadIcon className="w-4 h-4" />
           <span>{isExporting ? 'Exporting...' : 'Export'}</span>
-        </button>
+        </motion.button>
       </div>
     </motion.div>
   );
@@ -886,30 +857,25 @@ const DiagramCanvasInner = ({
   onClose,
   className = "",
   generatedData = null,
-  initialDiagramType = DIAGRAM_TYPES.FLOWCHART
 }) => {
   const [isExporting, setIsExporting] = useState(false);
-  const [diagramType, setDiagramType] = useState(initialDiagramType);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentLayout, setCurrentLayout] = useState('hierarchical');
   const reactFlowRef = useRef(null);
   const { fitView, screenToFlowPosition } = useReactFlow();
 
-  // Initialize with empty state
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  // Node types that handle API data with organic styling
+  const selectedNodes = useMemo(() => nodes.filter(node => node.selected), [nodes]);
+  const selectedEdges = useMemo(() => edges.filter(edge => edge.selected), [edges]);
+
   const nodeTypes = useMemo(() => ({
-    flowchart: FlowchartNode,
-    diamond: DiamondNode,
-    freetext: FreeTextNode,
-    default: FlowchartNode, // Fallback for any API node type
+    'advanced-node': AdvancedNode,
   }), []);
 
   const edgeTypes = useMemo(() => ({
-    diagram: OrganicEdge,
-    organic: OrganicEdge,
-    default: OrganicEdge, // Fallback for any API edge type
+    'advanced-edge': AdvancedEdge,
   }), []);
 
   // Context functions
@@ -933,57 +899,50 @@ const DiagramCanvasInner = ({
     deleteNode
   }), [updateNode, deleteNode]);
 
-  const selectedNodes = useMemo(() => nodes.filter(node => node.selected), [nodes]);
-  const selectedEdges = useMemo(() => edges.filter(edge => edge.selected), [edges]);
-
-  // CRITICAL: Process and load API data with organic layout
+  // Load and process API data
   useEffect(() => {
     if (generatedData) {
-      console.log('📥 Raw generatedData received:', generatedData);
       setIsLoading(true);
 
       try {
-        // Process the API data
-        const { nodes: processedNodes, edges: processedEdges, metadata } = processApiData(generatedData);
+        const { nodes: processedNodes, edges: processedEdges } = processApiData(generatedData);
 
-        console.log('✅ Setting processed data with organic layout:', {
-          nodes: processedNodes.length,
-          edges: processedEdges.length,
-          metadata
-        });
+        // Apply advanced ELK layout
+        createAdvancedLayout(processedNodes, processedEdges, currentLayout)
+          .then(({ nodes: layoutedNodes, edges: layoutedEdges }) => {
+            setNodes(layoutedNodes);
+            setEdges(layoutedEdges);
 
-        // Set diagram type from metadata
-        if (metadata.diagramType) {
-          setDiagramType(metadata.diagramType);
-        }
-
-        // Apply organic layout immediately
-        setTimeout(() => {
-          const organicNodes = createOrganicLayout(processedNodes, processedEdges, 1400, 900);
-
-          setNodes(organicNodes);
-          setEdges(processedEdges);
-
-          // Fit view with padding after organic layout
-          setTimeout(() => {
-            fitView({ padding: 0.15, duration: 800 });
+            setTimeout(() => {
+              fitView({ padding: 0.1, duration: 800 });
+              setIsLoading(false);
+            }, 300);
+          })
+          .catch(error => {
+            console.error('Layout failed:', error);
+            setNodes(processedNodes);
+            setEdges(processedEdges);
             setIsLoading(false);
-          }, 300);
-        }, 200);
+          });
 
       } catch (error) {
-        console.error('❌ Error processing API data:', error);
+        console.error('Error processing data:', error);
         setIsLoading(false);
       }
     }
-  }, [generatedData, setNodes, setEdges, fitView]);
+  }, [generatedData, fitView, currentLayout, setNodes, setEdges]);
 
   // Event handlers
   const onConnect = useCallback(
     (params) => setEdges((eds) => addEdge({
       ...params,
-      type: 'organic',
-      markerEnd: { type: MarkerType.ArrowClosed, color: '#4A90E2' },
+      type: 'advanced-edge',
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: '#374151',
+        width: 15,
+        height: 15
+      },
     }, eds)),
     [setEdges]
   );
@@ -1005,63 +964,68 @@ const DiagramCanvasInner = ({
   }, [selectedNodes, selectedEdges, setNodes, setEdges]);
 
   const handleFitView = useCallback(() => {
-    fitView({ padding: 0.1, duration: 800 });
+    fitView({ padding: 0.15, duration: 800 });
   }, [fitView]);
 
-  const handleLayout = useCallback((direction) => {
-    if (direction === 'organic') {
-      // Apply organic layout
-      const organicNodes = createOrganicLayout(nodes, edges, 1400, 900);
-      setNodes([...organicNodes]);
+  const handleLayout = useCallback(async (layoutType) => {
+    if (nodes.length === 0) return;
+
+    setCurrentLayout(layoutType);
+    setIsLoading(true);
+
+    try {
+      const { nodes: layoutedNodes, edges: layoutedEdges } = await createAdvancedLayout(
+        nodes,
+        edges,
+        layoutType
+      );
+
+      setNodes([...layoutedNodes]);
+      setEdges([...layoutedEdges]);
+
+      setTimeout(() => {
+        fitView({ padding: 0.15, duration: 800 });
+        setIsLoading(false);
+      }, 100);
+    } catch (error) {
+      console.error('Layout failed:', error);
+      setIsLoading(false);
     }
+  }, [nodes, edges, setNodes, setEdges, fitView]);
 
-    setTimeout(() => {
-      fitView({ padding: 0.1, duration: 800 });
-    }, 100);
-  }, [nodes, edges, setNodes, fitView]);
+  const handleExport = useCallback(async () => {
+    if (!reactFlowRef.current || nodes.length === 0) return;
 
-  const handleExport = async () => {
     setIsExporting(true);
     try {
-      const viewport = reactFlowRef.current?.querySelector('.react-flow__viewport');
-      if (viewport) {
-        const dataUrl = await toPng(viewport, {
-          quality: 1.0,
-          pixelRatio: 2,
-          backgroundColor: '#ffffff'
-        });
-        saveAs(dataUrl, `${diagramType}-organic-${Date.now()}.png`);
-      }
+      const viewport = reactFlowRef.current.querySelector('.react-flow__viewport');
+      if (!viewport) return;
+
+      const dataUrl = await toPng(viewport, {
+        backgroundColor: '#ffffff',
+        width: 1400,
+        height: 900,
+        pixelRatio: 3, // High quality
+        quality: 1.0,
+        cacheBust: true,
+      });
+
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+      saveAs(dataUrl, `advanced-diagram-${currentLayout}-${timestamp}.png`);
+
     } catch (error) {
       console.error('Export failed:', error);
     } finally {
       setIsExporting(false);
     }
-  };
-
-  const handleDiagramTypeChange = useCallback((newType) => {
-    setDiagramType(newType);
-  }, []);
-
-  const handlePaneClick = useCallback((event) => {
-    if (event.target.classList.contains('react-flow__pane')) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      const position = screenToFlowPosition({
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
-      });
-
-      const newTextNode = createNewNode('text', position, COLOR_SCHEMES[diagramType]?.primary, diagramType);
-      setNodes((nds) => [...nds, newTextNode]);
-    }
-  }, [setNodes, screenToFlowPosition, diagramType]);
+  }, [nodes, currentLayout]);
 
   return (
     <NodeUpdateContext.Provider value={nodeUpdateContextValue}>
-      <div className={`relative h-full bg-gradient-to-br from-blue-50 via-white to-indigo-50 ${className}`}>
+      <div className={`relative h-full bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 ${className}`}>
 
-        {/* Toolbar */}
-        <DiagramToolbar
+        {/* Advanced Toolbar */}
+        <AdvancedToolbar
           onAddShape={handleAddShape}
           onDeleteSelected={handleDeleteSelected}
           selectedNodes={selectedNodes}
@@ -1070,51 +1034,41 @@ const DiagramCanvasInner = ({
           onExport={handleExport}
           onLayout={handleLayout}
           isExporting={isExporting}
-          diagramType={diagramType}
-          onDiagramTypeChange={handleDiagramTypeChange}
+          currentLayout={currentLayout}
         />
 
         {/* Close Button */}
         {onClose && (
           <motion.button
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
             onClick={onClose}
-            className="fixed top-6 right-6 z-50 p-2 bg-white/90 backdrop-blur border text-gray-600 hover:text-red-500 rounded-full shadow-lg transition-colors border-gray-200/50"
+            className="fixed top-6 right-6 z-50 p-3 bg-white/90 backdrop-blur-md border border-gray-200/50 text-gray-600 hover:text-red-500 rounded-full shadow-xl transition-colors"
+            whileHover={{ scale: 1.05, rotate: 90 }}
+            whileTap={{ scale: 0.95 }}
           >
             <HiX className="w-5 h-5" />
           </motion.button>
         )}
 
-        {/* Stats */}
+        {/* Enhanced Stats */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="fixed bottom-6 left-6 z-50 flex items-center space-x-2 bg-white/90 backdrop-blur border rounded-lg px-3 py-2 shadow-lg text-sm border-gray-200/50"
+          className="fixed bottom-6 left-6 z-50 flex items-center space-x-4 bg-white/90 backdrop-blur-md border border-gray-200/50 rounded-xl px-4 py-3 shadow-xl text-sm"
         >
-          <span className="text-gray-700">Type: {diagramType}</span>
-          <span className="text-gray-300">|</span>
+          <div className="flex items-center space-x-2">
+            <HiSparkles className="w-4 h-4 text-indigo-500" />
+            <span className="text-gray-700 font-medium">Layout: {currentLayout}</span>
+          </div>
+          <div className="w-px h-4 bg-gray-300"></div>
           <span className="text-gray-700">Nodes: {nodes.length}</span>
-          <span className="text-gray-300">|</span>
-          <span className="text-gray-700">Connections: {edges.length}</span>
+          <span className="text-gray-700">Edges: {edges.length}</span>
           {(selectedNodes.length > 0 || selectedEdges.length > 0) && (
             <>
-              <span className="text-gray-300">|</span>
-              <span className="text-blue-600">Selected: {selectedNodes.length + selectedEdges.length}</span>
+              <div className="w-px h-4 bg-gray-300"></div>
+              <span className="text-blue-600 font-medium">Selected: {selectedNodes.length + selectedEdges.length}</span>
             </>
           )}
         </motion.div>
-
-        {/* Help Panel */}
-        <Panel position="bottom-right" className="bg-white/95 backdrop-blur rounded-lg p-3 text-xs text-gray-600 max-w-xs shadow-lg border border-gray-200/50">
-          <div className="space-y-1">
-            <p><strong>Double-click</strong> shapes to edit text</p>
-            <p><strong>Click canvas</strong> to add text notes</p>
-            <p><strong>Drag handles</strong> to connect shapes</p>
-            <p><strong>Organic Layout</strong> for hand-drawn style</p>
-            <p><strong>Delete key</strong> removes selected items</p>
-          </div>
-        </Panel>
 
         {/* React Flow Canvas */}
         <div className="h-full w-full" ref={reactFlowRef}>
@@ -1124,69 +1078,69 @@ const DiagramCanvasInner = ({
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
-            onPaneClick={handlePaneClick}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             connectionMode={ConnectionMode.Loose}
             fitView
             minZoom={0.1}
-            maxZoom={4}
+            maxZoom={3}
             deleteKeyCode="Delete"
-            multiSelectionKeyCode="Shift"
             defaultEdgeOptions={{
-              type: 'organic',
+              type: 'advanced-edge',
               markerEnd: {
                 type: MarkerType.ArrowClosed,
-                width: 12,
-                height: 12,
-                color: '#4A90E2',
-              },
-              style: {
-                strokeWidth: 2.5,
-                stroke: '#4A90E2',
+                width: 15,
+                height: 15,
+                color: '#374151',
               },
             }}
           >
             <Background
-              color="#e1e8ed"
-              gap={24}
-              size={1.2}
+              color="#e2e8f0"
+              gap={20}
+              size={1}
               variant="dots"
-              className="opacity-30"
+              className="opacity-40"
             />
             <Controls
               position="top-right"
-              className="!bg-white/90 !backdrop-blur !border-gray-200/50 !shadow-lg !rounded-lg"
+              className="!bg-white/90 !backdrop-blur-md !border-gray-200/50 !shadow-xl !rounded-lg"
             />
-            {nodes.length > 6 && (
+            {nodes.length > 8 && (
               <MiniMap
-                nodeColor={(node) => node.data?.style?.backgroundColor || COLOR_SCHEMES[diagramType]?.primary || '#4A90E2'}
-                maskColor="rgba(74, 144, 226, 0.1)"
-                position="bottom-left"
-                className="!bg-white/90 !backdrop-blur !border-gray-200/50 !shadow-lg !rounded-lg"
+                nodeColor={(node) => node.data?.colorScheme?.main || '#3B82F6'}
+                maskColor="rgba(59, 130, 246, 0.1)"
+                position="bottom-right"
+                className="!bg-white/90 !backdrop-blur-md !border-gray-200/50 !shadow-xl !rounded-lg"
               />
             )}
           </ReactFlow>
         </div>
 
-        {/* Loading State */}
-        {(isLoading || nodes.length === 0) && (
-          <div className="absolute inset-0 flex items-center justify-center bg-blue-50/80">
+        {/* Enhanced Loading State */}
+        {isLoading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm z-40"
+          >
             <div className="text-center">
-              {isLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-3 border-blue-500 mx-auto mb-3"></div>
-                  <div className="text-gray-600 text-lg mb-2 font-medium">Creating organic layout...</div>
-                  <div className="text-gray-500 text-sm">Applying hand-drawn style positioning</div>
-                </>
-              ) : (
-                <>
-                  <div className="text-gray-500 text-lg mb-2 font-medium">No diagram data loaded</div>
-                  <div className="text-gray-400 text-sm">Generate a diagram to see it here</div>
-                </>
-              )}
+              <motion.div
+                className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full mx-auto mb-4"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              />
+              <motion.div
+                className="text-gray-700 text-lg font-semibold mb-2"
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+              >
+                Applying {currentLayout} layout...
+              </motion.div>
+              <div className="text-gray-500 text-sm">Using advanced ELK algorithms</div>
             </div>
-          </div>
+          </motion.div>
         )}
       </div>
     </NodeUpdateContext.Provider>
