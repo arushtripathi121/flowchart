@@ -1,5 +1,9 @@
 |-- client
+    |-- .env
     |-- .gitignore
+    |-- .vercel
+        |-- project.json
+        |-- README.txt
     |-- eslint.config.js
     |-- index.html
     |-- package-lock.json
@@ -17,6 +21,9 @@
             |-- LoadingSpinner.jsx
             |-- Navigation.jsx
             |-- PromptForm.jsx
+            |-- ProtectedRoute.jsx
+        |-- context
+            |-- AuthContext.jsx
         |-- hooks
             |-- useFlowchart.js
         |-- index.css
@@ -25,18 +32,32 @@
             |-- Gallery.jsx
             |-- Generator.jsx
             |-- Home.jsx
+            |-- SignInPage.jsx
+        |-- router.jsx
         |-- services
             |-- api.js
+        |-- shells
+            |-- AppShell.jsx
+    |-- vercel.json
     |-- vite.config.js
 |-- server
     |-- .env
     |-- .gitignore
+    |-- config
+        |-- googleConfig.js
     |-- controllers
+        |-- authController.js
         |-- flowchartController.js
     |-- index.js
     |-- middleware
+        |-- auth.js
         |-- errorHandler.js
+        |-- User.js
+    |-- models
+        |-- User.js
     |-- package-lock.json
     |-- package.json
     |-- routes
+        |-- auth.js
         |-- flowchart.js
+    |-- vercel.json

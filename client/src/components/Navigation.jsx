@@ -1,17 +1,24 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { HiHome, HiLightningBolt, HiCollection } from 'react-icons/hi';
-// import { GiFlowChart } from 'react-icons/gi';
-import { FaChartLine } from "react-icons/fa";
+import { FaChartLine, FaSignOutAlt } from 'react-icons/fa';
+import { useAuth } from '../context/AuthContext';
 
 const Navigation = () => {
     const location = useLocation();
+    const { user, signOut } = useAuth();
+    const navigate = useNavigate();
 
     const navItems = [
-        { path: '/', label: 'Home', icon: HiHome },
+        { path: '/home', label: 'Home', icon: HiHome },
         { path: '/generator', label: 'Generator', icon: HiLightningBolt },
         { path: '/gallery', label: 'Gallery', icon: HiCollection }
     ];
+
+    const handleLogout = async () => {
+        await signOut();
+        navigate('/');
+    };
 
     return (
         <motion.nav
@@ -33,29 +40,39 @@ const Navigation = () => {
                         </span>
                     </motion.div>
 
-                    <div className="flex space-x-1">
-                        {navItems.map((item) => {
-                            const IconComponent = item.icon;
-                            return (
-                                <Link
-                                    key={item.path}
-                                    to={item.path}
-                                    className="relative"
+                    <div className="flex items-center space-x-4">
+                        {navItems.map(({ path, label, icon: Icon }) => (
+                            <Link key={path} to={path} className="relative">
+                                <motion.div
+                                    className={`px-4 py-2 rounded-xl flex items-center space-x-2 text-sm font-medium transition-all duration-300 ${location.pathname === path
+                                            ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg'
+                                            : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'
+                                        }`}
+                                    whileHover={{ scale: 1.05, y: -2 }}
+                                    whileTap={{ scale: 0.95 }}
                                 >
-                                    <motion.div
-                                        className={`px-4 py-2 rounded-xl flex items-center space-x-2 text-sm font-medium transition-all duration-300 ${location.pathname === item.path
-                                                ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg'
-                                                : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'
-                                            }`}
-                                        whileHover={{ scale: 1.05, y: -2 }}
-                                        whileTap={{ scale: 0.95 }}
-                                    >
-                                        <IconComponent className="w-4 h-4" />
-                                        <span>{item.label}</span>
-                                    </motion.div>
-                                </Link>
-                            );
-                        })}
+                                    <Icon className="w-4 h-4" />
+                                    <span>{label}</span>
+                                </motion.div>
+                            </Link>
+                        ))}
+
+                        {!user ? (
+                            <Link
+                                to="/"
+                                className="px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition"
+                            >
+                                Sign in
+                            </Link>
+                        ) : (
+                            <button
+                                onClick={handleLogout}
+                                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg flex items-center space-x-2 hover:bg-gray-300 transition"
+                            >
+                                <FaSignOutAlt />
+                                <span>Logout</span>
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
