@@ -35,6 +35,7 @@ import {
   HiSparkles,
   HiViewGrid,
   HiCog,
+  HiRefresh,
 } from 'react-icons/hi';
 import {
   FiSquare,
@@ -55,16 +56,69 @@ import {
   FiActivity,
   FiCpu,
   FiShare2,
-  FiTrendingUp
+  FiTrendingUp,
+  FiSettings,
+  FiSave,
+  FiPieChart,
+  FiBarChart,
+  FiMap
 } from 'react-icons/fi';
 import '@xyflow/react/dist/style.css';
+
+// ------------------------------------
+// ENHANCED DIAGRAM TYPE DEFINITIONS
+// ------------------------------------
+const DIAGRAM_TYPES = {
+  FLOWCHART: 'flowchart',
+  ER_DIAGRAM: 'er_diagram',
+  UML_CLASS: 'uml_class',
+  UML_SEQUENCE: 'uml_sequence',
+  UML_ACTIVITY: 'uml_activity',
+  UML_STATE: 'uml_state',
+  UML_USECASE: 'uml_usecase',
+  NETWORK: 'network',
+  ORG_CHART: 'org_chart',
+  MIND_MAP: 'mind_map',
+  GANTT: 'gantt',
+  SWIMLANE: 'swimlane',
+  BPMN: 'bpmn',
+  PROCESS_FLOW: 'process_flow',
+  SYSTEM_ARCHITECTURE: 'system_architecture',
+  INFRASTRUCTURE: 'infrastructure',
+  SITEMAP: 'sitemap',
+  USER_JOURNEY: 'user_journey',
+  SERVICE_BLUEPRINT: 'service_blueprint',
+  DATA_FLOW: 'data_flow',
+  DECISION_TREE: 'decision_tree',
+  CONCEPT_MAP: 'concept_map',
+  HIERARCHY: 'hierarchy',
+  MATRIX: 'matrix',
+  TIMELINE: 'timeline',
+  DEPENDENCY: 'dependency',
+  COMPARISON: 'comparison',
+  SANKEY: 'sankey',
+  FUNNEL: 'funnel',
+  KANBAN: 'kanban',
+  WORKFLOW: 'workflow',
+  VALUE_STREAM: 'value_stream',
+  CUSTOMER_JOURNEY: 'customer_journey',
+  LEAN_CANVAS: 'lean_canvas',
+  BUSINESS_MODEL: 'business_model',
+  FISHBONE: 'fishbone',
+  PYRAMID: 'pyramid',
+  VENN_DIAGRAM: 'venn_diagram',
+  SWOT: 'swot',
+  PORTER_FORCES: 'porter_forces',
+  BALANCED_SCORECARD: 'balanced_scorecard',
+  ROADMAP: 'roadmap',
+  CAPABILITY_MAP: 'capability_map'
+};
 
 // ------------------------------------
 // ADVANCED ELK LAYOUT ENGINE
 // ------------------------------------
 const elk = new ELK();
 
-// Advanced ELK configuration presets for different diagram types
 const ELK_PRESETS = {
   hierarchical: {
     'elk.algorithm': 'layered',
@@ -105,10 +159,21 @@ const ELK_PRESETS = {
     'elk.disco.componentCompaction.strategy': 'IMPROVE_STRAIGHTNESS',
     'elk.spacing.nodeNode': '60',
     'elk.disco.componentCompaction.componentComponentSpacing': '100',
+  },
+  sequence: {
+    'elk.algorithm': 'layered',
+    'elk.direction': 'RIGHT',
+    'elk.spacing.nodeNode': '100',
+    'elk.layered.spacing.nodeNodeBetweenLayers': '120',
+  },
+  timeline: {
+    'elk.algorithm': 'layered',
+    'elk.direction': 'RIGHT',
+    'elk.spacing.nodeNode': '80',
+    'elk.layered.spacing.nodeNodeBetweenLayers': '100',
   }
 };
 
-// Advanced layout function with ELK
 const createAdvancedLayout = async (nodes, edges, layoutType = 'hierarchical', options = {}) => {
   if (!nodes.length) return { nodes, edges };
 
@@ -128,7 +193,6 @@ const createAdvancedLayout = async (nodes, edges, layoutType = 'hierarchical', o
       sourcePosition: isHorizontal ? 'right' : 'bottom',
       width: node.data?.width || getNodeWidth(node.data?.shape, node.data?.label),
       height: node.data?.height || getNodeHeight(node.data?.shape),
-      // ELK ports for precise handle positioning
       ports: getElkPorts(node.data?.shape, isHorizontal),
     })),
     edges: edges.map(edge => ({
@@ -159,7 +223,6 @@ const createAdvancedLayout = async (nodes, edges, layoutType = 'hierarchical', o
   }
 };
 
-// Generate ELK ports for precise handle positioning
 const getElkPorts = (shape, isHorizontal) => {
   const ports = [];
 
@@ -171,7 +234,6 @@ const getElkPorts = (shape, isHorizontal) => {
       { id: 'port_left', properties: { 'port.side': 'WEST', 'port.index': '0' } }
     );
   } else {
-    // Rectangle and ellipse
     if (isHorizontal) {
       ports.push(
         { id: 'port_left', properties: { 'port.side': 'WEST', 'port.index': '0' } },
@@ -189,7 +251,7 @@ const getElkPorts = (shape, isHorizontal) => {
 };
 
 // ------------------------------------
-// PROFESSIONAL COLOR SYSTEM WITH CHROMA.JS
+// ENHANCED COLOR SYSTEM
 // ------------------------------------
 const generateColorScheme = (baseColor) => {
   const base = chroma(baseColor);
@@ -204,28 +266,45 @@ const generateColorScheme = (baseColor) => {
 };
 
 const ADVANCED_COLORS = {
-  // Semantic colors
-  process: generateColorScheme('#3B82F6'), // Blue
-  decision: generateColorScheme('#F59E0B'), // Amber  
-  terminal: generateColorScheme('#10B981'), // Emerald
-  data: generateColorScheme('#8B5CF6'), // Violet
-  connector: generateColorScheme('#EC4899'), // Pink
-
-  // Professional palette
-  corporate: generateColorScheme('#1E40AF'), // Corporate Blue
-  success: generateColorScheme('#059669'), // Success Green
-  warning: generateColorScheme('#D97706'), // Warning Orange
-  error: generateColorScheme('#DC2626'), // Error Red
-  neutral: generateColorScheme('#6B7280'), // Neutral Gray
+  process: generateColorScheme('#3B82F6'),
+  decision: generateColorScheme('#F59E0B'),
+  terminal: generateColorScheme('#10B981'),
+  data: generateColorScheme('#8B5CF6'),
+  connector: generateColorScheme('#EC4899'),
+  corporate: generateColorScheme('#1E40AF'),
+  success: generateColorScheme('#059669'),
+  warning: generateColorScheme('#D97706'),
+  error: generateColorScheme('#DC2626'),
+  neutral: generateColorScheme('#6B7280'),
+  // Diagram-specific colors
+  uml: generateColorScheme('#7C3AED'),
+  network: generateColorScheme('#059669'),
+  org: generateColorScheme('#DC2626'),
+  mind: generateColorScheme('#EC4899'),
+  gantt: generateColorScheme('#0891B2'),
+  bpmn: generateColorScheme('#EA580C'),
+  system: generateColorScheme('#7C2D12'),
 };
 
-// Shape-specific color mapping
 const SHAPE_COLOR_MAP = {
   rectangle: ADVANCED_COLORS.process,
   ellipse: ADVANCED_COLORS.terminal,
   diamond: ADVANCED_COLORS.decision,
   parallelogram: ADVANCED_COLORS.data,
   hexagon: ADVANCED_COLORS.connector,
+};
+
+// Diagram-type specific color mapping
+const DIAGRAM_COLOR_MAP = {
+  [DIAGRAM_TYPES.UML_CLASS]: ADVANCED_COLORS.uml,
+  [DIAGRAM_TYPES.UML_SEQUENCE]: ADVANCED_COLORS.uml,
+  [DIAGRAM_TYPES.UML_ACTIVITY]: ADVANCED_COLORS.uml,
+  [DIAGRAM_TYPES.NETWORK]: ADVANCED_COLORS.network,
+  [DIAGRAM_TYPES.ORG_CHART]: ADVANCED_COLORS.org,
+  [DIAGRAM_TYPES.MIND_MAP]: ADVANCED_COLORS.mind,
+  [DIAGRAM_TYPES.GANTT]: ADVANCED_COLORS.gantt,
+  [DIAGRAM_TYPES.BPMN]: ADVANCED_COLORS.bpmn,
+  [DIAGRAM_TYPES.SYSTEM_ARCHITECTURE]: ADVANCED_COLORS.system,
 };
 
 // ------------------------------------
@@ -261,7 +340,7 @@ const getNodeHeight = (shape) => {
 };
 
 // ------------------------------------
-// API DATA PROCESSING
+// ENHANCED API DATA PROCESSING
 // ------------------------------------
 const processApiData = (apiResponse) => {
   if (!apiResponse || !apiResponse.success || !apiResponse.data) {
@@ -269,10 +348,11 @@ const processApiData = (apiResponse) => {
   }
 
   const { data, metadata } = apiResponse;
+  const diagramType = metadata?.diagramType || 'flowchart';
 
   const processedNodes = (data.nodes || []).map((node) => {
-    const shape = node.type === 'diamond' ? 'diamond' : 'rectangle';
-    const colorScheme = SHAPE_COLOR_MAP[shape] || ADVANCED_COLORS.process;
+    const shape = determineNodeShape(node, diagramType);
+    const colorScheme = getNodeColorScheme(shape, diagramType, node.data?.category);
 
     return {
       id: node.id,
@@ -284,6 +364,7 @@ const processApiData = (apiResponse) => {
         width: getNodeWidth(shape, node.data?.label),
         height: getNodeHeight(shape),
         colorScheme: colorScheme,
+        diagramType: diagramType,
         ...node.data,
       },
     };
@@ -306,6 +387,8 @@ const processApiData = (apiResponse) => {
     },
     data: {
       label: edge.data?.label,
+      relationship: edge.data?.relationship,
+      diagramType: diagramType,
       ...edge.data
     }
   }));
@@ -314,10 +397,72 @@ const processApiData = (apiResponse) => {
     nodes: processedNodes,
     edges: processedEdges,
     metadata: {
-      diagramType: metadata?.diagramType || 'flowchart',
+      diagramType: diagramType,
       ...metadata
     }
   };
+};
+
+const determineNodeShape = (node, diagramType) => {
+  // Check if shape is explicitly defined
+  if (node.data?.shape) {
+    return node.data.shape;
+  }
+
+  // Determine shape based on diagram type and node properties
+  switch (diagramType) {
+    case DIAGRAM_TYPES.FLOWCHART:
+      if (node.data?.category === 'decision' || node.type === 'diamond') return 'diamond';
+      if (node.data?.category === 'start' || node.data?.category === 'end') return 'ellipse';
+      return 'rectangle';
+
+    case DIAGRAM_TYPES.ER_DIAGRAM:
+      if (node.data?.entityType === 'relationship') return 'diamond';
+      if (node.data?.entityType === 'attribute') return 'ellipse';
+      return 'rectangle';
+
+    case DIAGRAM_TYPES.UML_CLASS:
+    case DIAGRAM_TYPES.UML_SEQUENCE:
+      return 'rectangle';
+
+    case DIAGRAM_TYPES.NETWORK:
+      if (node.data?.deviceType === 'router') return 'hexagon';
+      if (node.data?.deviceType === 'cloud') return 'ellipse';
+      return 'rectangle';
+
+    case DIAGRAM_TYPES.BPMN:
+      if (node.data?.bpmnType === 'gateway') return 'diamond';
+      if (node.data?.bpmnType === 'event') return 'ellipse';
+      return 'rectangle';
+
+    default:
+      return 'rectangle';
+  }
+};
+
+const getNodeColorScheme = (shape, diagramType, category) => {
+  // First, try diagram-specific colors
+  if (DIAGRAM_COLOR_MAP[diagramType]) {
+    return DIAGRAM_COLOR_MAP[diagramType];
+  }
+
+  // Then, try shape-specific colors
+  if (SHAPE_COLOR_MAP[shape]) {
+    return SHAPE_COLOR_MAP[shape];
+  }
+
+  // Finally, use category-based colors or default
+  switch (category) {
+    case 'decision':
+      return ADVANCED_COLORS.decision;
+    case 'start':
+    case 'end':
+      return ADVANCED_COLORS.terminal;
+    case 'data':
+      return ADVANCED_COLORS.data;
+    default:
+      return ADVANCED_COLORS.process;
+  }
 };
 
 // ------------------------------------
@@ -395,7 +540,7 @@ const AdvancedTextEditor = ({
 };
 
 // ------------------------------------
-// ADVANCED NODE COMPONENT
+// ENHANCED ADVANCED NODE COMPONENT
 // ------------------------------------
 const AdvancedNode = ({ id, data, selected }) => {
   const [isEditing, setIsEditing] = useState(data.isNew || false);
@@ -427,7 +572,7 @@ const AdvancedNode = ({ id, data, selected }) => {
   }, [data.isNew, data.label, id, deleteNode]);
 
   const getShapeComponent = () => {
-    const { shape, colorScheme, width = 160, height = 60 } = data;
+    const { shape, colorScheme, width = 160, height = 60, diagramType } = data;
 
     const baseStyle = {
       width: `${width}px`,
@@ -448,39 +593,7 @@ const AdvancedNode = ({ id, data, selected }) => {
         'drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1))',
     };
 
-    const shapeStyles = {
-      rectangle: {
-        background: colorScheme.gradient,
-        border: `3px solid ${colorScheme.stroke}`,
-        borderRadius: '12px',
-      },
-      ellipse: {
-        background: colorScheme.gradient,
-        border: `3px solid ${colorScheme.stroke}`,
-        borderRadius: '50%',
-      },
-      diamond: {
-        background: colorScheme.gradient,
-        border: `3px solid ${colorScheme.stroke}`,
-        borderRadius: '12px',
-        transform: `rotate(45deg) ${selected ? 'scale(1.02)' : 'scale(1)'}`,
-        width: `${Math.min(width, height)}px`,
-        height: `${Math.min(width, height)}px`,
-      },
-      hexagon: {
-        background: colorScheme.gradient,
-        border: `3px solid ${colorScheme.stroke}`,
-        borderRadius: '8px',
-        clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)',
-      },
-      parallelogram: {
-        background: colorScheme.gradient,
-        border: `3px solid ${colorScheme.stroke}`,
-        borderRadius: '8px',
-        transform: 'skewX(-15deg)',
-      }
-    };
-
+    const shapeStyles = getShapeStyles(shape, colorScheme, diagramType);
     const isDiamond = shape === 'diamond';
     const isParallelogram = shape === 'parallelogram';
 
@@ -488,7 +601,7 @@ const AdvancedNode = ({ id, data, selected }) => {
       <div
         style={{
           ...baseStyle,
-          ...shapeStyles[shape] || shapeStyles.rectangle,
+          ...shapeStyles,
         }}
         onDoubleClick={() => !isDiamond && setIsEditing(true)}
       >
@@ -511,18 +624,65 @@ const AdvancedNode = ({ id, data, selected }) => {
               multiline={!isDiamond}
             />
           ) : (
-            <span style={{
+            <div style={{
               fontSize: isDiamond ? '12px' : '14px',
               lineHeight: '1.3',
               wordBreak: 'break-word',
-              display: 'block',
             }}>
-              {data.label || 'Click to edit'}
-            </span>
+              <div className="font-semibold">{data.label || 'Click to edit'}</div>
+              {renderDiagramSpecificContent(data)}
+            </div>
           )}
         </div>
       </div>
     );
+  };
+
+  const renderDiagramSpecificContent = (data) => {
+    const { diagramType, attributes, methods, deviceType, ipAddress, startDate, duration } = data;
+
+    switch (diagramType) {
+      case DIAGRAM_TYPES.UML_CLASS:
+        return (
+          <div style={{ fontSize: '10px', marginTop: '8px', textAlign: 'left' }}>
+            {attributes && attributes.length > 0 && (
+              <div>
+                <div style={{ borderBottom: '1px solid #ccc', marginBottom: '4px' }}></div>
+                {attributes.slice(0, 3).map((attr, idx) => (
+                  <div key={idx}>{attr}</div>
+                ))}
+              </div>
+            )}
+            {methods && methods.length > 0 && (
+              <div>
+                <div style={{ borderBottom: '1px solid #ccc', margin: '4px 0' }}></div>
+                {methods.slice(0, 2).map((method, idx) => (
+                  <div key={idx}>{method}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+
+      case DIAGRAM_TYPES.NETWORK:
+        return (
+          <div style={{ fontSize: '10px', marginTop: '4px' }}>
+            {deviceType && <div>{deviceType}</div>}
+            {ipAddress && <div>{ipAddress}</div>}
+          </div>
+        );
+
+      case DIAGRAM_TYPES.GANTT:
+        return (
+          <div style={{ fontSize: '10px', marginTop: '4px' }}>
+            {startDate && <div>{startDate}</div>}
+            {duration && <div>{duration}</div>}
+          </div>
+        );
+
+      default:
+        return null;
+    }
   };
 
   const getHandlePositions = () => {
@@ -561,8 +721,80 @@ const AdvancedNode = ({ id, data, selected }) => {
   );
 };
 
+const getShapeStyles = (shape, colorScheme, diagramType) => {
+  const baseStyles = {
+    rectangle: {
+      background: colorScheme.gradient,
+      border: `3px solid ${colorScheme.stroke}`,
+      borderRadius: '12px',
+    },
+    ellipse: {
+      background: colorScheme.gradient,
+      border: `3px solid ${colorScheme.stroke}`,
+      borderRadius: '50%',
+    },
+    diamond: {
+      background: colorScheme.gradient,
+      border: `3px solid ${colorScheme.stroke}`,
+      borderRadius: '12px',
+      transform: 'rotate(45deg)',
+    },
+    hexagon: {
+      background: colorScheme.gradient,
+      border: `3px solid ${colorScheme.stroke}`,
+      borderRadius: '8px',
+      clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)',
+    },
+    parallelogram: {
+      background: colorScheme.gradient,
+      border: `3px solid ${colorScheme.stroke}`,
+      borderRadius: '8px',
+      transform: 'skewX(-15deg)',
+    }
+  };
+
+  // Diagram-specific style modifications
+  const diagramSpecificStyles = getDiagramSpecificStyles(diagramType, shape);
+
+  return {
+    ...baseStyles[shape] || baseStyles.rectangle,
+    ...diagramSpecificStyles
+  };
+};
+
+const getDiagramSpecificStyles = (diagramType, shape) => {
+  switch (diagramType) {
+    case DIAGRAM_TYPES.UML_CLASS:
+      return {
+        backgroundColor: '#ffffff',
+        borderColor: '#7C3AED',
+        color: '#1F2937',
+        borderWidth: '2px',
+      };
+
+    case DIAGRAM_TYPES.ER_DIAGRAM:
+      if (shape === 'diamond') {
+        return {
+          borderColor: '#DC2626',
+        };
+      }
+      return {
+        borderColor: '#059669',
+      };
+
+    case DIAGRAM_TYPES.BPMN:
+      return {
+        borderRadius: shape === 'ellipse' ? '50%' : '8px',
+        borderColor: '#EA580C',
+      };
+
+    default:
+      return {};
+  }
+};
+
 // ------------------------------------
-// ADVANCED EDGE COMPONENT
+// ADVANCED EDGE COMPONENT  
 // ------------------------------------
 const AdvancedEdge = ({
   id,
@@ -590,20 +822,52 @@ const AdvancedEdge = ({
     curvature: 0.2,
   });
 
+  const getEdgeStyle = () => {
+    const { diagramType, relationship } = data || {};
+
+    let style = {
+      strokeWidth: selected ? 3 : 2,
+      stroke: selected || isHovered ? '#3B82F6' : '#6B7280',
+      strokeLinecap: 'round',
+      strokeLinejoin: 'round',
+      filter: 'drop-shadow(0 1px 3px rgba(0, 0, 0, 0.1))',
+      ...edgeStyle,
+    };
+
+    // Diagram-specific edge styles
+    switch (diagramType) {
+      case DIAGRAM_TYPES.UML_CLASS:
+        if (relationship === 'inheritance') {
+          style.strokeDasharray = '0';
+          style.markerEnd = { ...markerEnd, type: MarkerType.ArrowClosed };
+        } else if (relationship === 'composition') {
+          style.strokeDasharray = '0';
+          style.stroke = '#7C3AED';
+        } else if (relationship === 'dependency') {
+          style.strokeDasharray = '5,5';
+        }
+        break;
+
+      case DIAGRAM_TYPES.ER_DIAGRAM:
+        style.strokeWidth = 3;
+        style.stroke = '#059669';
+        break;
+
+      case DIAGRAM_TYPES.DATA_FLOW:
+        style.markerEnd = { ...markerEnd, type: MarkerType.ArrowClosed };
+        break;
+    }
+
+    return style;
+  };
+
   return (
     <>
       <BaseEdge
         id={id}
         path={edgePath}
         markerEnd={markerEnd}
-        style={{
-          strokeWidth: selected ? 3 : 2,
-          stroke: selected || isHovered ? '#3B82F6' : '#6B7280',
-          strokeLinecap: 'round',
-          strokeLinejoin: 'round',
-          filter: 'drop-shadow(0 1px 3px rgba(0, 0, 0, 0.1))',
-          ...edgeStyle,
-        }}
+        style={getEdgeStyle()}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         interactionWidth={20}
@@ -643,7 +907,7 @@ const NodeUpdateContext = React.createContext({
 });
 
 // ------------------------------------
-// ADVANCED TOOLBAR
+// ENHANCED ADVANCED TOOLBAR
 // ------------------------------------
 const AdvancedToolbar = ({
   onAddShape,
@@ -655,17 +919,47 @@ const AdvancedToolbar = ({
   onLayout,
   isExporting,
   currentLayout,
+  diagramType,
+  onRegenerateWithType,
+  isRegenerating
 }) => {
   const [showShapePanel, setShowShapePanel] = useState(false);
   const [showLayoutPanel, setShowLayoutPanel] = useState(false);
+  const [showDiagramPanel, setShowDiagramPanel] = useState(false);
 
-  const shapes = [
-    { key: 'rectangle', icon: FiSquare, label: 'Process', color: 'process' },
-    { key: 'ellipse', icon: FiCircle, label: 'Start/End', color: 'terminal' },
-    { key: 'diamond', icon: FiHexagon, label: 'Decision', color: 'decision' },
-    { key: 'hexagon', icon: FiCpu, label: 'Connector', color: 'connector' },
-    { key: 'parallelogram', icon: FiDatabase, label: 'Data', color: 'data' },
-  ];
+  // Enhanced shapes based on diagram type
+  const getShapesForDiagramType = (type) => {
+    const commonShapes = [
+      { key: 'rectangle', icon: FiSquare, label: 'Process', color: 'process' },
+      { key: 'ellipse', icon: FiCircle, label: 'Terminal', color: 'terminal' },
+      { key: 'diamond', icon: FiHexagon, label: 'Decision', color: 'decision' },
+      { key: 'hexagon', icon: FiCpu, label: 'Connector', color: 'connector' },
+      { key: 'parallelogram', icon: FiDatabase, label: 'Data', color: 'data' },
+    ];
+
+    const diagramSpecificShapes = {
+      [DIAGRAM_TYPES.NETWORK]: [
+        { key: 'hexagon', icon: FiCpu, label: 'Router', color: 'connector' },
+        { key: 'rectangle', icon: FiBox, label: 'Switch', color: 'process' },
+        { key: 'ellipse', icon: FiCircle, label: 'Cloud', color: 'terminal' },
+        { key: 'rectangle', icon: FiDatabase, label: 'Server', color: 'data' },
+      ],
+      [DIAGRAM_TYPES.BPMN]: [
+        { key: 'ellipse', icon: FiCircle, label: 'Event', color: 'terminal' },
+        { key: 'rectangle', icon: FiSquare, label: 'Task', color: 'process' },
+        { key: 'diamond', icon: FiHexagon, label: 'Gateway', color: 'decision' },
+      ],
+      [DIAGRAM_TYPES.UML_CLASS]: [
+        { key: 'rectangle', icon: FiBox, label: 'Class', color: 'uml' },
+        { key: 'rectangle', icon: FiLayers, label: 'Interface', color: 'uml' },
+        { key: 'rectangle', icon: FiDatabase, label: 'Abstract', color: 'uml' },
+      ]
+    };
+
+    return diagramSpecificShapes[type] || commonShapes;
+  };
+
+  const shapes = getShapesForDiagramType(diagramType);
 
   const layouts = [
     { key: 'hierarchical', label: 'Hierarchical', icon: FiLayers, description: 'Top-down flow' },
@@ -673,30 +967,49 @@ const AdvancedToolbar = ({
     { key: 'radial', label: 'Radial', icon: FiTarget, description: 'Circular arrangement' },
     { key: 'force', label: 'Force-Directed', icon: FiZap, description: 'Physics-based' },
     { key: 'circular', label: 'Circular', icon: FiCircle, description: 'Perfect circle' },
+    { key: 'sequence', label: 'Sequence', icon: FiBarChart, description: 'Sequential flow' },
+    { key: 'timeline', label: 'Timeline', icon: FiTrendingUp, description: 'Time-based' },
   ];
 
-  const handleAddShape = (shapeKey) => {
-    const position = { x: Math.random() * 300 + 100, y: Math.random() * 300 + 100 };
-    const colorScheme = SHAPE_COLOR_MAP[shapeKey] || ADVANCED_COLORS.process;
+  // Continue from the previous AdvancedToolbar component...
 
-    const newNode = {
-      id: `node_${Date.now()}`,
-      type: 'advanced-node',
-      position,
-      data: {
-        label: `New ${shapeKey}`,
-        shape: shapeKey,
-        colorScheme: colorScheme,
-        width: getNodeWidth(shapeKey, `New ${shapeKey}`),
-        height: getNodeHeight(shapeKey),
-        isNew: true,
-      },
-    };
+  const diagramTypes = [
+    { key: DIAGRAM_TYPES.FLOWCHART, label: 'Flowchart', icon: FiGitBranch, category: 'Process' },
+    { key: DIAGRAM_TYPES.ER_DIAGRAM, label: 'ER Diagram', icon: FiDatabase, category: 'Database' },
+    { key: DIAGRAM_TYPES.UML_CLASS, label: 'UML Class', icon: FiBox, category: 'UML' },
+    { key: DIAGRAM_TYPES.UML_SEQUENCE, label: 'UML Sequence', icon: FiActivity, category: 'UML' },
+    { key: DIAGRAM_TYPES.UML_ACTIVITY, label: 'UML Activity', icon: FiTrello, category: 'UML' },
+    { key: DIAGRAM_TYPES.NETWORK, label: 'Network', icon: FiShare2, category: 'Technical' },
+    { key: DIAGRAM_TYPES.ORG_CHART, label: 'Organization', icon: FiUsers, category: 'Business' },
+    { key: DIAGRAM_TYPES.MIND_MAP, label: 'Mind Map', icon: FiTarget, category: 'Thinking' },
+    { key: DIAGRAM_TYPES.GANTT, label: 'Gantt Chart', icon: FiBarChart, category: 'Project' },
+    { key: DIAGRAM_TYPES.BPMN, label: 'BPMN', icon: FiSettings, category: 'Process' },
+    { key: DIAGRAM_TYPES.SYSTEM_ARCHITECTURE, label: 'System Architecture', icon: FiCpu, category: 'Technical' },
+    { key: DIAGRAM_TYPES.USER_JOURNEY, label: 'User Journey', icon: FiMap, category: 'UX' },
+    { key: DIAGRAM_TYPES.DATA_FLOW, label: 'Data Flow', icon: FiTrendingUp, category: 'Technical' },
+    { key: DIAGRAM_TYPES.DECISION_TREE, label: 'Decision Tree', icon: FiGitBranch, category: 'Analysis' },
+    { key: DIAGRAM_TYPES.CONCEPT_MAP, label: 'Concept Map', icon: FiShare2, category: 'Thinking' },
+    { key: DIAGRAM_TYPES.TIMELINE, label: 'Timeline', icon: FiTrendingUp, category: 'Project' },
+    { key: DIAGRAM_TYPES.SWIMLANE, label: 'Swimlane', icon: FiLayers, category: 'Process' },
+    { key: DIAGRAM_TYPES.VALUE_STREAM, label: 'Value Stream', icon: FiTrendingUp, category: 'Business' },
+    { key: DIAGRAM_TYPES.CUSTOMER_JOURNEY, label: 'Customer Journey', icon: FiUsers, category: 'Business' },
+    { key: DIAGRAM_TYPES.BUSINESS_MODEL, label: 'Business Model', icon: FiPieChart, category: 'Business' },
+    { key: DIAGRAM_TYPES.INFRASTRUCTURE, label: 'Infrastructure', icon: FiCpu, category: 'Technical' },
+    { key: DIAGRAM_TYPES.KANBAN, label: 'Kanban Board', icon: FiTrello, category: 'Project' },
+    { key: DIAGRAM_TYPES.WORKFLOW, label: 'Workflow', icon: FiActivity, category: 'Process' },
+    { key: DIAGRAM_TYPES.FISHBONE, label: 'Fishbone', icon: FiShare2, category: 'Analysis' },
+    { key: DIAGRAM_TYPES.SWOT, label: 'SWOT Analysis', icon: FiGrid, category: 'Analysis' },
+    { key: DIAGRAM_TYPES.ROADMAP, label: 'Roadmap', icon: FiMap, category: 'Planning' },
+  ];
 
-    onAddShape(newNode);
-    setShowShapePanel(false);
-  };
+  const groupedDiagramTypes = diagramTypes.reduce((groups, type) => {
+    const category = type.category;
+    if (!groups[category]) groups[category] = [];
+    groups[category].push(type);
+    return groups;
+  }, {});
 
+  // Continue the AdvancedToolbar component
   return (
     <motion.div
       className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50"
@@ -705,6 +1018,65 @@ const AdvancedToolbar = ({
       transition={{ duration: 0.3, ease: "easeOut" }}
     >
       <div className="flex items-center space-x-4 bg-white/95 backdrop-blur-md border border-gray-200/50 rounded-2xl px-6 py-4 shadow-2xl">
+
+        {/* Diagram Type Selector */}
+        <div className="relative">
+          <motion.button
+            onClick={() => setShowDiagramPanel(!showDiagramPanel)}
+            className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl hover:from-indigo-600 hover:to-purple-700 transition-all duration-200 text-sm font-semibold shadow-lg"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <HiSparkles className="w-4 h-4" />
+            <span>Regenerate</span>
+          </motion.button>
+
+          <AnimatePresence>
+            {showDiagramPanel && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                className="absolute top-full mt-2 left-0 bg-white/95 backdrop-blur-md border border-gray-200/50 rounded-xl shadow-2xl p-4 min-w-[400px] max-h-[500px] overflow-y-auto z-50"
+              >
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold text-gray-800 mb-2">Choose Diagram Type</h3>
+                  <p className="text-sm text-gray-600">Select a diagram type to regenerate with the same content</p>
+                </div>
+
+                {Object.entries(groupedDiagramTypes).map(([category, types]) => (
+                  <div key={category} className="mb-4">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 mr-2"></span>
+                      {category}
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {types.map(({ key, label, icon: Icon }) => (
+                        <motion.button
+                          key={key}
+                          onClick={() => {
+                            onRegenerateWithType?.(key);
+                            setShowDiagramPanel(false);
+                          }}
+                          className={`flex items-center space-x-2 p-3 text-left text-sm rounded-lg transition-all duration-200 ${diagramType === key
+                              ? 'bg-blue-100 border-2 border-blue-300 text-blue-800'
+                              : 'hover:bg-gray-50 text-gray-700 border border-transparent'
+                            }`}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          disabled={isRegenerating}
+                        >
+                          <Icon className="w-4 h-4 flex-shrink-0" />
+                          <span className="truncate">{label}</span>
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
         {/* Layout Selector */}
         <div className="relative">
@@ -851,16 +1223,19 @@ const AdvancedToolbar = ({
 };
 
 // ------------------------------------
-// MAIN COMPONENT
+// ENHANCED MAIN COMPONENT
 // ------------------------------------
 const DiagramCanvasInner = ({
   onClose,
   className = "",
   generatedData = null,
+  onRegenerateWithType,
 }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [currentLayout, setCurrentLayout] = useState('hierarchical');
+  const [currentDiagramType, setCurrentDiagramType] = useState('flowchart');
   const reactFlowRef = useRef(null);
   const { fitView, screenToFlowPosition } = useReactFlow();
 
@@ -899,16 +1274,83 @@ const DiagramCanvasInner = ({
     deleteNode
   }), [updateNode, deleteNode]);
 
+  // Enhanced data processing with diagram type detection
+  const processEnhancedApiData = (apiResponse) => {
+    if (!apiResponse || !apiResponse.success || !apiResponse.data) {
+      return { nodes: [], edges: [], metadata: {} };
+    }
+
+    const { data, metadata } = apiResponse;
+    const diagramType = metadata?.diagramType || 'flowchart';
+    setCurrentDiagramType(diagramType);
+
+    const processedNodes = (data.nodes || []).map((node) => {
+      const shape = determineNodeShape(node, diagramType);
+      const colorScheme = getNodeColorScheme(shape, diagramType, node.data?.category);
+
+      return {
+        id: node.id,
+        type: 'advanced-node',
+        position: node.position || { x: 0, y: 0 },
+        data: {
+          label: node.data?.label || `Node ${node.id}`,
+          shape: shape,
+          width: getNodeWidth(shape, node.data?.label),
+          height: getNodeHeight(shape),
+          colorScheme: colorScheme,
+          diagramType: diagramType,
+          ...node.data,
+        },
+      };
+    });
+
+    const processedEdges = (data.edges || []).map(edge => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      type: 'advanced-edge',
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        width: 15,
+        height: 15,
+        color: '#374151',
+      },
+      style: {
+        strokeWidth: 2,
+        stroke: '#374151',
+      },
+      data: {
+        label: edge.data?.label,
+        relationship: edge.data?.relationship,
+        diagramType: diagramType,
+        ...edge.data
+      }
+    }));
+
+    return {
+      nodes: processedNodes,
+      edges: processedEdges,
+      metadata: {
+        diagramType: diagramType,
+        ...metadata
+      }
+    };
+  };
+
   // Load and process API data
   useEffect(() => {
     if (generatedData) {
       setIsLoading(true);
 
       try {
-        const { nodes: processedNodes, edges: processedEdges } = processApiData(generatedData);
+        const { nodes: processedNodes, edges: processedEdges, metadata } = processEnhancedApiData(generatedData);
+
+        // Determine optimal layout based on diagram type
+        const optimalLayout = getOptimalLayout(metadata.diagramType);
+        setCurrentLayout(optimalLayout);
 
         // Apply advanced ELK layout
-        createAdvancedLayout(processedNodes, processedEdges, currentLayout)
+        createAdvancedLayout(processedNodes, processedEdges, optimalLayout)
           .then(({ nodes: layoutedNodes, edges: layoutedEdges }) => {
             setNodes(layoutedNodes);
             setEdges(layoutedEdges);
@@ -930,7 +1372,26 @@ const DiagramCanvasInner = ({
         setIsLoading(false);
       }
     }
-  }, [generatedData, fitView, currentLayout, setNodes, setEdges]);
+  }, [generatedData, fitView, setNodes, setEdges]);
+
+  // Get optimal layout based on diagram type
+  const getOptimalLayout = (diagramType) => {
+    const layoutMap = {
+      [DIAGRAM_TYPES.FLOWCHART]: 'hierarchical',
+      [DIAGRAM_TYPES.ER_DIAGRAM]: 'organic',
+      [DIAGRAM_TYPES.UML_CLASS]: 'hierarchical',
+      [DIAGRAM_TYPES.UML_SEQUENCE]: 'sequence',
+      [DIAGRAM_TYPES.NETWORK]: 'organic',
+      [DIAGRAM_TYPES.ORG_CHART]: 'hierarchical',
+      [DIAGRAM_TYPES.MIND_MAP]: 'radial',
+      [DIAGRAM_TYPES.GANTT]: 'timeline',
+      [DIAGRAM_TYPES.TIMELINE]: 'timeline',
+      [DIAGRAM_TYPES.SYSTEM_ARCHITECTURE]: 'organic',
+      [DIAGRAM_TYPES.BPMN]: 'hierarchical',
+    };
+
+    return layoutMap[diagramType] || 'hierarchical';
+  };
 
   // Event handlers
   const onConnect = useCallback(
@@ -993,6 +1454,19 @@ const DiagramCanvasInner = ({
     }
   }, [nodes, edges, setNodes, setEdges, fitView]);
 
+  const handleRegenerateWithType = useCallback(async (newDiagramType) => {
+    if (!onRegenerateWithType) return;
+
+    setIsRegenerating(true);
+    try {
+      await onRegenerateWithType(newDiagramType);
+    } catch (error) {
+      console.error('Regeneration failed:', error);
+    } finally {
+      setIsRegenerating(false);
+    }
+  }, [onRegenerateWithType]);
+
   const handleExport = useCallback(async () => {
     if (!reactFlowRef.current || nodes.length === 0) return;
 
@@ -1011,20 +1485,20 @@ const DiagramCanvasInner = ({
       });
 
       const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-      saveAs(dataUrl, `advanced-diagram-${currentLayout}-${timestamp}.png`);
+      saveAs(dataUrl, `${currentDiagramType}-diagram-${currentLayout}-${timestamp}.png`);
 
     } catch (error) {
       console.error('Export failed:', error);
     } finally {
       setIsExporting(false);
     }
-  }, [nodes, currentLayout]);
+  }, [nodes, currentLayout, currentDiagramType]);
 
   return (
     <NodeUpdateContext.Provider value={nodeUpdateContextValue}>
       <div className={`relative h-full bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 ${className}`}>
 
-        {/* Advanced Toolbar */}
+        {/* Enhanced Advanced Toolbar */}
         <AdvancedToolbar
           onAddShape={handleAddShape}
           onDeleteSelected={handleDeleteSelected}
@@ -1035,6 +1509,9 @@ const DiagramCanvasInner = ({
           onLayout={handleLayout}
           isExporting={isExporting}
           currentLayout={currentLayout}
+          diagramType={currentDiagramType}
+          onRegenerateWithType={handleRegenerateWithType}
+          isRegenerating={isRegenerating}
         />
 
         {/* Close Button */}
@@ -1049,7 +1526,7 @@ const DiagramCanvasInner = ({
           </motion.button>
         )}
 
-        {/* Enhanced Stats */}
+        {/* Enhanced Stats with Diagram Type */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -1057,6 +1534,13 @@ const DiagramCanvasInner = ({
         >
           <div className="flex items-center space-x-2">
             <HiSparkles className="w-4 h-4 text-indigo-500" />
+            <span className="text-gray-700 font-medium">
+              {currentDiagramType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+            </span>
+          </div>
+          <div className="w-px h-4 bg-gray-300"></div>
+          <div className="flex items-center space-x-2">
+            <FiLayers className="w-4 h-4 text-purple-500" />
             <span className="text-gray-700 font-medium">Layout: {currentLayout}</span>
           </div>
           <div className="w-px h-4 bg-gray-300"></div>
@@ -1118,7 +1602,7 @@ const DiagramCanvasInner = ({
         </div>
 
         {/* Enhanced Loading State */}
-        {isLoading && (
+        {(isLoading || isRegenerating) && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -1136,9 +1620,17 @@ const DiagramCanvasInner = ({
                 animate={{ opacity: [0.5, 1, 0.5] }}
                 transition={{ duration: 1.5, repeat: Infinity }}
               >
-                Applying {currentLayout} layout...
+                {isRegenerating
+                  ? `Generating ${currentDiagramType} diagram...`
+                  : `Applying ${currentLayout} layout...`
+                }
               </motion.div>
-              <div className="text-gray-500 text-sm">Using advanced ELK algorithms</div>
+              <div className="text-gray-500 text-sm">
+                {isRegenerating
+                  ? 'Using AI to create your diagram'
+                  : 'Using advanced ELK algorithms'
+                }
+              </div>
             </div>
           </motion.div>
         )}
