@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import { refreshAuth, logout } from '../services/api';
+import { createContext, useContext, useEffect, useState } from "react";
+import { refreshAuth, logout } from "../services/api";
 
 const AuthContext = createContext(null);
 
@@ -7,12 +7,20 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [bootstrapped, setBootstrapped] = useState(false);
 
-    // Run on every refresh to validate session
+    // Validate session on page load / refresh
     useEffect(() => {
-        refreshAuth()
-            .then((res) => setUser(res?.data?.user || null))
-            .catch(() => setUser(null))
-            .finally(() => setBootstrapped(true));
+        const checkAuth = async () => {
+            try {
+                const res = await refreshAuth(); // returns { user: {...} }
+                setUser(res?.user || null); // ✅ correct path
+            } catch {
+                setUser(null);
+            } finally {
+                setBootstrapped(true);
+            }
+        };
+
+        checkAuth();
     }, []);
 
     const signOut = async () => {
@@ -20,7 +28,7 @@ export const AuthProvider = ({ children }) => {
             await logout();
         } finally {
             setUser(null);
-            localStorage.removeItem('user-info');
+            localStorage.removeItem("user-info");
         }
     };
 

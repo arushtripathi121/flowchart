@@ -1,15 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const {
-    generateFlowchart,
-    validateFlowchartData,
-    getFlowchartFormats
+    getDiagramFormats,
+    generateDiagram,
+    validateDiagramStructure
 } = require('../controllers/flowchartController');
 
-router.get('/formats', getFlowchartFormats);
+router.get('/formats', getDiagramFormats);
 
-router.post('/generate', generateFlowchart);
+router.post('/generate', generateDiagram);
 
-router.post('/validate', validateFlowchartData);
+router.post('/validate', validateDiagramStructure);
 
 module.exports = router;

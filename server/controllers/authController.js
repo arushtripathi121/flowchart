@@ -9,40 +9,50 @@ exports.googleLogin = async (req, res) => {
         const googleRes = await oauth2Client.getToken(code);
 
         oauth2Client.setCredentials(googleRes.tokens);
-        const userRes = await axios.get(`https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=${googleRes.tokens.access_token}`);
+        const userRes = await axios.get(
+            `https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=${googleRes.tokens.access_token}`
+        );
 
         const { email, name, picture } = userRes.data;
 
-        let user = await UserModel.findOne({ email })
+        let user = await UserModel.findOne({ email });
 
         if (!user) {
-            user = await UserModel.create({ name, email, image: picture })
+            user = await UserModel.create({ name, email, image: picture });
         }
 
         const { _id } = user;
-        const token = jwt.sign({ _id, email }, process.env.JWT_SECRET,
-            {
-                expiresIn: process.env.JWT_TIMEOUT
-            }
+        const token = jwt.sign(
+            { _id, email },
+            process.env.JWT_SECRET,
+            { expiresIn: process.env.JWT_TIMEOUT }
         );
+
+        // ✅ set cookie named "token"
+        res.cookie("token", token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production", // true in prod
+            sameSite: "strict",
+            maxAge: 1000 * 60 * 60 * 24 // 1 day
+        });
 
         return res.status(200).json({
             success: true,
-            message: 'User created successfully',
-            token,
+            message: "User logged in successfully",
             user
-        })
+        });
     } catch (e) {
         console.log(e);
         res.status(500).json({
             success: false,
-            message: 'internal server error'
-        })
+            message: "Internal server error"
+        });
     }
-}
+};
 
 exports.verifyToken = (req, res) => {
-    const token = req.cookies.token;
+    const token = req.cookies.token; // read token from cookie
+    console.log(token);
     if (!token) return res.status(401).json({ error: "Not authenticated" });
 
     try {
@@ -54,6 +64,10 @@ exports.verifyToken = (req, res) => {
 };
 
 exports.logout = (req, res) => {
-    res.clearCookie("token");
+    res.clearCookie("token", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict"
+    });
     res.json({ message: "Logged out" });
 };

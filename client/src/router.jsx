@@ -1,23 +1,35 @@
-import React from 'react';
-import { createBrowserRouter } from 'react-router-dom';
-import AppShell from './shells/AppShell';
-import SignInPage from './pages/SignInPage';
-import Home from './pages/Home';
-import Generator from './pages/Generator';
-import Gallery from './pages/Gallery';
-import ProtectedRoute from './components/ProtectedRoute';
+import React from "react";
+import { createBrowserRouter } from "react-router-dom";
+import AppShell from "./shells/AppShell";
+import SignInPage from "./pages/SignInPage";
+import Home from "./pages/Home";
+import Generator from "./pages/Generator";
+import Gallery from "./pages/Gallery";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { useAuth } from "./context/AuthContext";
+
+// Wrapper to decide root route
+const RootPage = () => {
+    const { user, bootstrapped } = useAuth();
+
+    if (!bootstrapped) {
+        return <div>Loading...</div>; // spinner/loader
+    }
+
+    return user ? <Home /> : <SignInPage />;
+};
 
 const router = createBrowserRouter([
     {
-        path: '/',
-        element: <SignInPage />
+        path: "/",
+        element: <RootPage /> // ✅ dynamically choose
     },
     {
-        path: '/',
+        path: "/",
         element: <AppShell />,
         children: [
             {
-                path: '/home',
+                path: "home",
                 element: (
                     <ProtectedRoute>
                         <Home />
@@ -25,7 +37,7 @@ const router = createBrowserRouter([
                 )
             },
             {
-                path: '/generator',
+                path: "generator",
                 element: (
                     <ProtectedRoute>
                         <Generator />
@@ -33,7 +45,7 @@ const router = createBrowserRouter([
                 )
             },
             {
-                path: '/gallery',
+                path: "gallery",
                 element: (
                     <ProtectedRoute>
                         <Gallery />

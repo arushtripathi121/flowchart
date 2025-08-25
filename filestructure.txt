@@ -17,7 +17,7 @@
         |-- assets
             |-- react.svg
         |-- components
-            |-- FlowchartViewer.jsx
+            |-- DiagramCanvas.jsx
             |-- LoadingSpinner.jsx
             |-- Navigation.jsx
             |-- PromptForm.jsx
